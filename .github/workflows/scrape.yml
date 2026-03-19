@@ -1,0 +1,33 @@
+name: Scrape data
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install packages
+        run: pip install requests beautifulsoup4
+
+      - name: Run scraper
+        run: python scraper.py
+
+      - name: Commit data
+        run: |
+          git config --global user.name "bot"
+          git config --global user.email "bot@github.com"
+          git add data.csv
+          git commit -m "update data" || echo "no changes"
+          git push
