@@ -55,7 +55,7 @@ def load_existing_keys(filename):
         return existing
 
     with open(filename, "r", newline="", encoding="utf-8") as f:
-        reader = csv.reader(f)
+        reader = csv.reader(f, delimiter=";")
         next(reader, None)
         for row in reader:
             if len(row) >= 5:
@@ -73,7 +73,7 @@ def main():
     existing = load_existing_keys(OUTPUT_FILE)
 
     with open(OUTPUT_FILE, "a", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
+        writer = csv.writer(f, delimiter=";")
 
         if not file_exists:
             writer.writerow([
