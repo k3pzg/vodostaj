@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vodostaj & Protok — Postaja 43</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Bebas+Neue&display=swap');
+
+  :root {
+    --bg: #0a0e14;
+    --surface: #111620;
+    --border: #1e2635;
+    --water: #2dd4bf;
+    --flow: #f59e0b;
+    --text: #e2e8f0;
+    --muted: #4a5568;
+    --accent-water: rgba(45,212,191,0.15);
+    --accent-flow: rgba(245,158,11,0.15);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated water background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 40% at 20% 80%, rgba(45,212,191,0.04) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 30% at 80% 20%, rgba(245,158,11,0.03) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 24px 60px;
+  }
+
+  header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 48px;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .header-left h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    letter-spacing: 0.06em;
+    line-height: 1;
+    background: linear-gradient(135deg, var(--water) 0%, #67e8f9 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .header-left .subtitle {
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-top: 6px;
+  }
+
+  .status-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 0.72rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--water);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+  }
+
+  /* Stats row */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 20px 16px;
+    position: relative;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(12px);
+    animation: fadeUp 0.5s ease forwards;
+  }
+
+  .stat-card:nth-child(1) { animation-delay: 0.1s; }
+  .stat-card:nth-child(2) { animation-delay: 0.2s; }
+  .stat-card:nth-child(3) { animation-delay: 0.3s; }
+  .stat-card:nth-child(4) { animation-delay: 0.4s; }
+
+  @keyframes fadeUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.water::before { background: var(--water); }
+  .stat-card.flow::before { background: var(--flow); }
+
+  .stat-label {
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .stat-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.4rem;
+    letter-spacing: 0.04em;
+    line-height: 1;
+  }
+
+  .stat-card.water .stat-value { color: var(--water); }
+  .stat-card.flow .stat-value { color: var(--flow); }
+
+  .stat-unit {
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* Range selector */
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .controls span {
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-right: 4px;
+  }
+
+  .range-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .range-btn:hover { border-color: var(--water); color: var(--text); }
+  .range-btn.active { border-color: var(--water); color: var(--water); background: var(--accent-water); }
+
+  /* Chart cards */
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px 24px 20px;
+    margin-bottom: 20px;
+    opacity: 0;
+    transform: translateY(16px);
+    animation: fadeUp 0.6s ease forwards;
+  }
+
+  .chart-card:nth-of-type(1) { animation-delay: 0.3s; }
+  .chart-card:nth-of-type(2) { animation-delay: 0.45s; }
+
+  .chart-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .chart-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .chart-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.2rem;
+    letter-spacing: 0.1em;
+  }
+
+  .chart-title.water { color: var(--water); }
+  .chart-title.flow { color: var(--flow); }
+
+  .chart-subtitle {
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    margin-left: auto;
+  }
+
+  canvas { display: block; }
+
+  /* Table */
+  .table-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    opacity: 0;
+    animation: fadeUp 0.6s ease 0.55s forwards;
+  }
+
+  .table-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .table-scroll { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.72rem;
+  }
+
+  thead th {
+    text-align: left;
+    padding: 10px 20px;
+    color: var(--muted);
+    font-size: 0.62rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.01);
+  }
+
+  tbody tr {
+    border-bottom: 1px solid rgba(30,38,53,0.6);
+    transition: background 0.1s;
+  }
+
+  tbody tr:hover { background: rgba(45,212,191,0.04); }
+  tbody tr:last-child { border-bottom: none; }
+
+  tbody td {
+    padding: 9px 20px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  td.val-water { color: var(--water); font-weight: 500; }
+  td.val-flow { color: var(--flow); font-weight: 500; }
+  td.time-col { color: var(--muted); }
+
+  /* Loading / error */
+  .loading {
+    text-align: center;
+    padding: 60px;
+    color: var(--muted);
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+  }
+
+  .loading-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    background: var(--water);
+    border-radius: 50%;
+    margin: 0 3px;
+    animation: blink 1.2s ease-in-out infinite;
+  }
+
+  .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dot:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes blink {
+    0%, 100% { opacity: 0.2; }
+    50% { opacity: 1; }
+  }
+
+  .error-msg {
+    text-align: center;
+    padding: 40px;
+    color: #f87171;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+  }
+
+  footer {
+    text-align: center;
+    font-size: 0.62rem;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    margin-top: 40px;
+    opacity: 0.6;
+  }
+
+  footer a { color: var(--muted); text-decoration: none; }
+  footer a:hover { color: var(--water); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="header-left">
+      <h1>VODOSTAJ</h1>
+      <div class="subtitle">Postaja 43 &nbsp;·&nbsp; Sektor 4 &nbsp;·&nbsp; Automatsko osvježavanje svakih sat vremena</div>
+    </div>
+    <div class="status-badge">
+      <div class="status-dot"></div>
+      <span id="last-update">Učitavanje...</span>
+    </div>
+  </header>
+
+  <div class="stats" id="stats">
+    <div class="stat-card water">
+      <div class="stat-label">Posljednji vodostaj</div>
+      <div class="stat-value" id="stat-wl">—</div>
+      <div class="stat-unit">cm</div>
+    </div>
+    <div class="stat-card water">
+      <div class="stat-label">Min vodostaj (period)</div>
+      <div class="stat-value" id="stat-wl-min">—</div>
+      <div class="stat-unit">cm</div>
+    </div>
+    <div class="stat-card flow">
+      <div class="stat-label">Posljednji protok</div>
+      <div class="stat-value" id="stat-fl">—</div>
+      <div class="stat-unit">m³/s</div>
+    </div>
+    <div class="stat-card flow">
+      <div class="stat-label">Max protok (period)</div>
+      <div class="stat-value" id="stat-fl-max">—</div>
+      <div class="stat-unit">m³/s</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <span>Period:</span>
+    <button class="range-btn" data-hours="24">24h</button>
+    <button class="range-btn active" data-hours="72">3 dana</button>
+    <button class="range-btn" data-hours="168">7 dana</button>
+    <button class="range-btn" data-hours="720">30 dana</button>
+    <button class="range-btn" data-hours="0">Sve</button>
+  </div>
+
+  <div class="chart-card" id="chart-water-card">
+    <div class="chart-header">
+      <div class="chart-dot" style="background:var(--water)"></div>
+      <div class="chart-title water">VODOSTAJ</div>
+      <div class="chart-subtitle">cm</div>
+    </div>
+    <div id="loading-water" class="loading">
+      <span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span>
+    </div>
+    <canvas id="chart-water" height="90" style="display:none"></canvas>
+  </div>
+
+  <div class="chart-card" id="chart-flow-card">
+    <div class="chart-header">
+      <div class="chart-dot" style="background:var(--flow)"></div>
+      <div class="chart-title flow">PROTOK</div>
+      <div class="chart-subtitle">m³/s</div>
+    </div>
+    <div id="loading-flow" class="loading">
+      <span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span>
+    </div>
+    <canvas id="chart-flow" height="90" style="display:none"></canvas>
+  </div>
+
+  <div class="table-card">
+    <div class="table-header">
+      <div class="chart-dot" style="background:var(--muted)"></div>
+      <div class="chart-title" style="color:var(--text);font-size:1rem">ZADNJA MJERENJA</div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Datum</th>
+            <th>Vrijeme</th>
+            <th>Vodostaj (cm)</th>
+            <th>Protok (m³/s)</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <tr><td colspan="4" style="text-align:center;padding:30px;color:var(--muted)">Učitavanje podataka...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>
+    Podaci: <a href="https://mvodostaji.voda.hr" target="_blank">mvodostaji.voda.hr</a>
+    &nbsp;·&nbsp;
+    Izvor: <a href="https://github.com/k3pzg/vodostaj" target="_blank">github.com/k3pzg/vodostaj</a>
+    &nbsp;·&nbsp;
+    Osvježava se automatski svakih sat
+  </footer>
+</div>
+
+<script>
+const CSV_URL = "https://raw.githubusercontent.com/k3pzg/vodostaj/main/vodostaj_protok.csv";
+
+let allData = [];
+let chartWater = null;
+let chartFlow = null;
+let currentHours = 72;
+
+// Parse CSV (semicolon separated, comma as decimal)
+function parseCSV(text) {
+  const lines = text.trim().split("\n");
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const parts = lines[i].split(";");
+    if (parts.length < 4) continue;
+    const datum = parts[0].trim();
+    const vrijeme = parts[1].trim();
+    const vodostajRaw = parts[2].trim().replace(",", ".");
+    const protokRaw = parts[3].trim().replace(",", ".");
+    const [d, m, y] = datum.split(".");
+    const dtStr = `${y}-${m}-${d}T${vrijeme}:00`;
+    const dt = new Date(dtStr);
+    if (isNaN(dt)) continue;
+    rows.push({
+      dt,
+      datum,
+      vrijeme,
+      vodostaj: parseFloat(vodostajRaw),
+      protok: parseFloat(protokRaw),
+    });
+  }
+  // Sort ascending
+  rows.sort((a, b) => a.dt - b.dt);
+  return rows;
+}
+
+function filterByHours(data, hours) {
+  if (!hours) return data;
+  const cutoff = new Date(Date.now() - hours * 3600 * 1000);
+  return data.filter(r => r.dt >= cutoff);
+}
+
+function formatLabel(dt) {
+  const d = dt.getDate().toString().padStart(2,'0');
+  const m = (dt.getMonth()+1).toString().padStart(2,'0');
+  const H = dt.getHours().toString().padStart(2,'0');
+  const M = dt.getMinutes().toString().padStart(2,'0');
+  return `${d}.${m}. ${H}:${M}`;
+}
+
+function buildChart(canvasId, labels, values, color, unit) {
+  const ctx = document.getElementById(canvasId).getContext("2d");
+  const gradient = ctx.createLinearGradient(0, 0, 0, 280);
+  gradient.addColorStop(0, color.replace(")", ",0.25)").replace("rgb", "rgba"));
+  gradient.addColorStop(1, color.replace(")", ",0)").replace("rgb", "rgba"));
+
+  return new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        borderColor: color,
+        borderWidth: 2,
+        backgroundColor: gradient,
+        fill: true,
+        tension: 0.35,
+        pointRadius: values.length > 100 ? 0 : 3,
+        pointHoverRadius: 5,
+        pointBackgroundColor: color,
+        pointBorderColor: "#0a0e14",
+        pointBorderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#111620",
+          borderColor: "#1e2635",
+          borderWidth: 1,
+          titleColor: "#4a5568",
+          bodyColor: color,
+          titleFont: { family: "'DM Mono', monospace", size: 11 },
+          bodyFont: { family: "'DM Mono', monospace", size: 13, weight: "500" },
+          padding: 12,
+          callbacks: {
+            label: ctx => ` ${ctx.parsed.y} ${unit}`,
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: "rgba(30,38,53,0.8)", drawTicks: false },
+          ticks: {
+            color: "#4a5568",
+            font: { family: "'DM Mono', monospace", size: 10 },
+            maxTicksLimit: 8,
+            maxRotation: 0,
+          },
+          border: { color: "#1e2635" }
+        },
+        y: {
+          grid: { color: "rgba(30,38,53,0.8)", drawTicks: false },
+          ticks: {
+            color: "#4a5568",
+            font: { family: "'DM Mono', monospace", size: 10 },
+            padding: 8,
+          },
+          border: { color: "#1e2635", dash: [4,4] }
+        }
+      }
+    }
+  });
+}
+
+function updateStats(filtered) {
+  if (!filtered.length) return;
+  const last = filtered[filtered.length - 1];
+  const wlVals = filtered.map(r => r.vodostaj).filter(v => !isNaN(v));
+  const flVals = filtered.map(r => r.protok).filter(v => !isNaN(v));
+
+  document.getElementById("stat-wl").textContent = isNaN(last.vodostaj) ? "—" : last.vodostaj.toFixed(1).replace(".",",");
+  document.getElementById("stat-fl").textContent = isNaN(last.protok) ? "—" : last.protok.toFixed(2).replace(".",",");
+  document.getElementById("stat-wl-min").textContent = wlVals.length ? Math.min(...wlVals).toFixed(1).replace(".",",") : "—";
+  document.getElementById("stat-fl-max").textContent = flVals.length ? Math.max(...flVals).toFixed(2).replace(".",",") : "—";
+
+  // Update last timestamp
+  document.getElementById("last-update").textContent = `Zadnje: ${last.datum} ${last.vrijeme}`;
+}
+
+function updateTable(filtered) {
+  const tbody = document.getElementById("table-body");
+  const recent = [...filtered].reverse().slice(0, 48);
+  if (!recent.length) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--muted)">Nema podataka</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = recent.map(r => `
+    <tr>
+      <td>${r.datum}</td>
+      <td class="time-col">${r.vrijeme}</td>
+      <td class="val-water">${isNaN(r.vodostaj) ? "—" : r.vodostaj.toFixed(1).replace(".",",")}</td>
+      <td class="val-flow">${isNaN(r.protok) ? "—" : r.protok.toFixed(2).replace(".",",")}</td>
+    </tr>
+  `).join("");
+}
+
+function renderCharts(filtered) {
+  const labels = filtered.map(r => formatLabel(r.dt));
+  const wlVals = filtered.map(r => isNaN(r.vodostaj) ? null : r.vodostaj);
+  const flVals = filtered.map(r => isNaN(r.protok) ? null : r.protok);
+
+  // Water level chart
+  document.getElementById("loading-water").style.display = "none";
+  const cwEl = document.getElementById("chart-water");
+  cwEl.style.display = "block";
+  if (chartWater) { chartWater.destroy(); }
+  chartWater = buildChart("chart-water", labels, wlVals, "#2dd4bf", "cm");
+
+  // Flow chart
+  document.getElementById("loading-flow").style.display = "none";
+  const cfEl = document.getElementById("chart-flow");
+  cfEl.style.display = "block";
+  if (chartFlow) { chartFlow.destroy(); }
+  chartFlow = buildChart("chart-flow", labels, flVals, "#f59e0b", "m³/s");
+}
+
+function applyFilter(hours) {
+  currentHours = hours;
+  const filtered = filterByHours(allData, hours);
+  if (!filtered.length) return;
+  updateStats(filtered);
+  renderCharts(filtered);
+  updateTable(filtered);
+}
+
+async function loadData() {
+  try {
+    const res = await fetch(CSV_URL + "?t=" + Date.now());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    allData = parseCSV(text);
+    if (!allData.length) throw new Error("Nema podataka u CSV-u");
+    applyFilter(currentHours);
+  } catch (err) {
+    ["loading-water", "loading-flow"].forEach(id => {
+      document.getElementById(id).innerHTML = `<div class="error-msg">⚠ Greška pri učitavanju: ${err.message}</div>`;
+    });
+    document.getElementById("last-update").textContent = "Greška pri učitavanju";
+    console.error(err);
+  }
+}
+
+// Range buttons
+document.querySelectorAll(".range-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".range-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    applyFilter(parseInt(btn.dataset.hours));
+  });
+});
+
+loadData();
+// Auto-refresh every 5 minutes
+setInterval(loadData, 5 * 60 * 1000);
+</script>
+</body>
+</html>
