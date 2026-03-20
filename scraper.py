@@ -1,6 +1,6 @@
 import csv
 import os
-from datetime import datetime
+import re
 
 import requests
 from bs4 import BeautifulSoup
@@ -16,6 +16,17 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0"
 }
 
+DATE_RE = re.compile(r"^\d{2}\.\d{2}\.\d{2}\.$")
+TIME_RE = re.compile(r"^\d{2}:\d{2}$")
+
+
+def is_valid_date(value):
+    return bool(DATE_RE.match(value.strip()))
+
+
+def is_valid_time(value):
+    return bool(TIME_RE.match(value.strip()))
+
 
 def fetch_data(url):
     r = requests.get(url, headers=HEADERS, timeout=30)
@@ -25,16 +36,31 @@ def fetch_data(url):
     data = {}
 
     for tr in soup.find_all("tr"):
-        cells = [td.get_text(" ", strip=True) for td in tr.find_all("td")]
-        if len(cells) < 4:
-            continue
+        cells = [cell.get_text(" ", strip=True) for cell in tr.find_all(["td", "th"])]
 
-        datum = cells[0]
-        vrijeme = cells[1]
-        vrijednost = cells[2]
+        # Trebamo naći red koji stvarno sadrži datum i vrijeme
+        # i onda uzeti prvu sljedeću numeričku vrijednost kao mjerenje.
+        datum = None
+        vrijeme = None
+        vrijednost = None
 
-        key = (datum, vrijeme)
-        data[key] = vrijednost
+        for i, cell in enumerate(cells):
+            if datum is None and is_valid_date(cell):
+                datum = cell
+                continue
+
+            if datum is not None and vrijeme is None and is_valid_time(cell):
+                vrijeme = cell
+                continue
+
+            if datum is not None and vrijeme is not None:
+                # prvo sljedeće polje nakon vremena uzimamo kao vrijednost
+                if cell not in ["Datum", "Vrijeme", "Vodostaj", "Protok", "Trend", "Grafički prikaz"]:
+                    vrijednost = cell
+                    break
+
+        if datum and vrijeme and vrijednost:
+            data[(datum, vrijeme)] = vrijednost
 
     return data
 
@@ -61,6 +87,8 @@ def main():
     existing = load_existing_keys()
     file_exists = os.path.exists(OUTPUT_FILE)
 
+    all_keys = sorted(set(vodostaj.keys()) | set(protok.keys()), reverse=True)
+
     with open(OUTPUT_FILE, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f, delimiter=";")
 
@@ -69,16 +97,17 @@ def main():
 
         inserted = 0
 
-        for key in vodostaj:
-            datum, vrijeme = key
-
+        for key in all_keys:
             if key in existing:
                 continue
 
-            v = vodostaj.get(key, "")
-            p = protok.get(key, "")
-
-            writer.writerow([datum, vrijeme, v, p])
+            datum, vrijeme = key
+            writer.writerow([
+                datum,
+                vrijeme,
+                vodostaj.get(key, ""),
+                protok.get(key, "")
+            ])
             inserted += 1
 
     print(f"Upisano novih redova: {inserted}")
