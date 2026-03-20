@@ -5,8 +5,6 @@ from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
 
-POSTAJA = "Ilova - Maslenjača"
-
 URLS = {
     "vodostaj": "https://mvodostaji.voda.hr/Home/PregledVodostajaPostaje?bpID=6&postajaID=43&sektorID=4",
     "protok": "https://mvodostaji.voda.hr/Home/PregledProtokaPostaje?bpID=6&postajaID=43&sektorID=4",
@@ -19,12 +17,12 @@ HEADERS = {
 }
 
 
-def fetch_rows(url, tip):
+def fetch_data(url):
     r = requests.get(url, headers=HEADERS, timeout=30)
     r.raise_for_status()
 
     soup = BeautifulSoup(r.text, "html.parser")
-    rows = []
+    data = {}
 
     for tr in soup.find_all("tr"):
         cells = [td.get_text(" ", strip=True) for td in tr.find_all("td")]
@@ -34,64 +32,54 @@ def fetch_rows(url, tip):
         datum = cells[0]
         vrijeme = cells[1]
         vrijednost = cells[2]
-        trend = cells[3]
 
-        rows.append([
-            POSTAJA,
-            tip,
-            datum,
-            vrijeme,
-            vrijednost,
-            trend,
-            datetime.utcnow().isoformat()
-        ])
+        key = (datum, vrijeme)
+        data[key] = vrijednost
 
-    return rows
+    return data
 
 
-def load_existing_keys(filename):
+def load_existing_keys():
     existing = set()
-    if not os.path.exists(filename):
+    if not os.path.exists(OUTPUT_FILE):
         return existing
 
-    with open(filename, "r", newline="", encoding="utf-8") as f:
+    with open(OUTPUT_FILE, "r", newline="", encoding="utf-8") as f:
         reader = csv.reader(f, delimiter=";")
         next(reader, None)
         for row in reader:
-            if len(row) >= 5:
-                key = (row[0], row[1], row[2], row[3], row[4])
-                existing.add(key)
+            if len(row) >= 2:
+                existing.add((row[0], row[1]))
+
     return existing
 
 
 def main():
-    all_rows = []
-    for tip, url in URLS.items():
-        all_rows.extend(fetch_rows(url, tip))
+    vodostaj = fetch_data(URLS["vodostaj"])
+    protok = fetch_data(URLS["protok"])
 
+    existing = load_existing_keys()
     file_exists = os.path.exists(OUTPUT_FILE)
-    existing = load_existing_keys(OUTPUT_FILE)
 
     with open(OUTPUT_FILE, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f, delimiter=";")
 
         if not file_exists:
-            writer.writerow([
-                "postaja",
-                "tip",
-                "datum",
-                "vrijeme",
-                "vrijednost",
-                "trend",
-                "fetched_at_utc"
-            ])
+            writer.writerow(["datum", "vrijeme", "vodostaj", "protok"])
 
         inserted = 0
-        for row in all_rows:
-            key = (row[0], row[1], row[2], row[3], row[4])
-            if key not in existing:
-                writer.writerow(row)
-                inserted += 1
+
+        for key in vodostaj:
+            datum, vrijeme = key
+
+            if key in existing:
+                continue
+
+            v = vodostaj.get(key, "")
+            p = protok.get(key, "")
+
+            writer.writerow([datum, vrijeme, v, p])
+            inserted += 1
 
     print(f"Upisano novih redova: {inserted}")
 
