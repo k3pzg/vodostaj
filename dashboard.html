@@ -26,8 +26,9 @@ fetch(CSV_URL)
     rows.forEach(row => {
         const [datum, vrijeme, vodo, prot] = row.split(";");
 
-        const dt = datum + " " + vrijeme;
-        x.push(dt);
+        const [day, month, year] = datum.split(".");
+        const isoDate = `${year}-${month}-${day}T${vrijeme}`;
+        x.push(new Date(isoDate));
 
         vodostaj.push(parseFloat(vodo.replace(",", ".")));
         protok.push(parseFloat(prot.replace(",", ".")));
