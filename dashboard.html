@@ -1,72 +1,108 @@
 <!DOCTYPE html>
-<html>
+<html lang="hr">
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Vodostaj i protok</title>
     <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
 </head>
 <body>
+    <h2>Vodostaj i protok</h2>
+    <div id="chart" style="width:100%;height:700px;"></div>
 
-<h2>Vodostaj i protok</h2>
+    <script>
+        const CSV_URL = "https://raw.githubusercontent.com/k3pzg/vodostaj/main/vodostaj_protok.csv";
 
-<div id="chart" style="width:100%;height:600px;"></div>
+        function parseCroDateTime(datum, vrijeme) {
+            const parts = datum.trim().split(".");
+            const day = Number(parts[0]);
+            const month = Number(parts[1]) - 1;
+            const year = Number(parts[2]);
 
-<script>
-const CSV_URL = "https://raw.githubusercontent.com/k3pzg/vodostaj/main/vodostaj_protok.csv";
+            const timeParts = vrijeme.trim().split(":");
+            const hour = Number(timeParts[0]);
+            const minute = Number(timeParts[1]);
 
-fetch(CSV_URL)
-  .then(response => response.text())
-  .then(data => {
-    const rows = data.split("\n").slice(1).filter(r => r.trim() !== "");
-
-    let x = [];
-    let vodostaj = [];
-    let protok = [];
-
-    rows.forEach(row => {
-        const [datum, vrijeme, vodo, prot] = row.split(";");
-
-        const [day, month, year] = datum.split(".");
-        const isoDate = `${year}-${month}-${day}T${vrijeme}`;
-        x.push(new Date(isoDate));
-
-        vodostaj.push(parseFloat(vodo.replace(",", ".")));
-        protok.push(parseFloat(prot.replace(",", ".")));
-    });
-
-    const trace1 = {
-        x: x,
-        y: vodostaj,
-        name: "Vodostaj",
-        yaxis: "y1",
-        type: "scatter"
-    };
-
-    const trace2 = {
-        x: x,
-        y: protok,
-        name: "Protok",
-        yaxis: "y2",
-        type: "scatter"
-    };
-
-    const layout = {
-        title: "Vodostaj i protok",
-        xaxis: {
-            rangeslider: { visible: true },
-            type: "date"
-        },
-        yaxis: { title: "Vodostaj (cm)" },
-        yaxis2: {
-            title: "Protok (m3/s)",
-            overlaying: "y",
-            side: "right"
+            return new Date(year, month, day, hour, minute);
         }
-    };
 
-    Plotly.newPlot("chart", [trace1, trace2], layout);
-});
-</script>
+        fetch(CSV_URL)
+            .then(response => response.text())
+            .then(data => {
+                const lines = data.trim().split("\n");
 
+                const rows = lines.slice(1).filter(line => line.trim() !== "");
+
+                const parsed = rows.map(row => {
+                    const cols = row.split(";");
+                    const datum = cols[0]?.trim();
+                    const vrijeme = cols[1]?.trim();
+                    const vodostajRaw = cols[2]?.trim();
+                    const protokRaw = cols[3]?.trim();
+
+                    return {
+                        x: parseCroDateTime(datum, vrijeme),
+                        vodostaj: Number(vodostajRaw.replace(",", ".")),
+                        protok: Number(protokRaw.replace(",", "."))
+                    };
+                }).filter(r =>
+                    r.x instanceof Date &&
+                    !isNaN(r.x.getTime()) &&
+                    !isNaN(r.vodostaj) &&
+                    !isNaN(r.protok)
+                );
+
+                parsed.sort((a, b) => a.x - b.x);
+
+                const x = parsed.map(r => r.x);
+                const vodostaj = parsed.map(r => r.vodostaj);
+                const protok = parsed.map(r => r.protok);
+
+                const trace1 = {
+                    x: x,
+                    y: vodostaj,
+                    name: "Vodostaj",
+                    type: "scatter",
+                    mode: "lines+markers",
+                    yaxis: "y1"
+                };
+
+                const trace2 = {
+                    x: x,
+                    y: protok,
+                    name: "Protok",
+                    type: "scatter",
+                    mode: "lines+markers",
+                    yaxis: "y2"
+                };
+
+                const layout = {
+                    title: "Vodostaj i protok",
+                    xaxis: {
+                        title: "Datum i vrijeme",
+                        type: "date",
+                        rangeslider: { visible: true }
+                    },
+                    yaxis: {
+                        title: "Vodostaj (cm)"
+                    },
+                    yaxis2: {
+                        title: "Protok (m3/s)",
+                        overlaying: "y",
+                        side: "right"
+                    },
+                    hovermode: "x unified"
+                };
+
+                Plotly.newPlot("chart", [trace1, trace2], layout, {
+                    responsive: true,
+                    scrollZoom: true
+                });
+            })
+            .catch(error => {
+                document.getElementById("chart").innerHTML =
+                    "<p>Greška pri učitavanju CSV-a.</p><pre>" + error + "</pre>";
+            });
+    </script>
 </body>
 </html>
