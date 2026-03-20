@@ -1,100 +1,183 @@
 import csv
 import os
-import re
+from datetime import datetime
+from typing import Dict, Tuple, List
+
 import requests
 from bs4 import BeautifulSoup
 
-URLS = {
-    "vodostaj": "https://mvodostaji.voda.hr/Home/PregledVodostajaPostaje?bpID=6&postajaID=43&sektorID=4",
-    "protok": "https://mvodostaji.voda.hr/Home/PregledProtokaPostaje?bpID=6&postajaID=43&sektorID=4",
-}
+URL_VODOSTAJ = "https://mvodostaji.voda.hr/Home/PregledVodostajaPostaje?bpID=6&postajaID=43&sektorID=4"
+URL_PROTOK = "https://mvodostaji.voda.hr/Home/PregledProtokaPostaje?bpID=6&postajaID=43&sektorID=4"
 
-OUTPUT_FILE = "data.csv"
+CSV_PATH = "vodostaj_protok.csv"
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0"
+    "User-Agent": "Mozilla/5.0",
+    "Accept-Language": "hr,en;q=0.9",
 }
 
-DATE_RE = re.compile(r"^\d{2}\.\d{2}\.\d{2}\.$")
-TIME_RE = re.compile(r"^\d{2}:\d{2}$")
+
+def fetch_html(url: str) -> str:
+    r = requests.get(url, headers=HEADERS, timeout=30)
+    r.raise_for_status()
+    return r.text
 
 
-def fetch_data(url):
-    response = requests.get(url, headers=HEADERS, timeout=30)
-    response.raise_for_status()
+def normalize_date(date_str: str) -> str:
+    # 20.03.26. -> 20.03.2026
+    parts = date_str.strip().split(".")
+    day = parts[0].zfill(2)
+    month = parts[1].zfill(2)
+    year = f"20{parts[2].zfill(2)}"
+    return f"{day}.{month}.{year}"
 
-    soup = BeautifulSoup(response.text, "html.parser")
+
+def normalize_water_level(value: str) -> str:
+    # 28 -> 28,0
+    value = value.strip().replace(".", ",")
+    if "," not in value:
+        value = f"{value},0"
+    return value
+
+
+def normalize_flow(value: str) -> str:
+    # 0,79 ostaje 0,79
+    return value.strip().replace(".", ",")
+
+
+def is_measurement_row(cells: List[str]) -> bool:
+    if len(cells) != 5:
+        return False
+
+    date_text = cells[1].strip()
+    time_text = cells[2].strip()
+    value_text = cells[3].strip()
+
+    if not date_text or not time_text or not value_text:
+        return False
+
+    lowered = " ".join(cells).lower()
+    if "datum" in lowered and "vrijeme" in lowered:
+        return False
+
+    if len(date_text) != 9 or date_text.count(".") < 3:
+        return False
+
+    if len(time_text) != 5 or ":" not in time_text:
+        return False
+
+    return True
+
+
+def parse_table(html: str, mode: str) -> Dict[Tuple[str, str], str]:
+    soup = BeautifulSoup(html, "html.parser")
+    table = soup.find("table", id="example")
+    if table is None:
+        raise ValueError("Nije pronađena tablica #example")
+
+    tbody = table.find("tbody")
+    if tbody is None:
+        raise ValueError("Nije pronađen tbody")
+
     data = {}
 
-    for tr in soup.find_all("tr"):
-        cells = [td.get_text(" ", strip=True) for td in tr.find_all("td")]
-
-        if len(cells) < 3:
+    for tr in tbody.find_all("tr"):
+        tds = tr.find_all("td", recursive=False)
+        if len(tds) != 5:
             continue
 
-        datum = cells[0]
-        vrijeme = cells[1]
-        vrijednost = cells[2]
+        cells = [td.get_text(" ", strip=True) for td in tds]
 
-        if not DATE_RE.match(datum):
+        if not is_measurement_row(cells):
             continue
 
-        if not TIME_RE.match(vrijeme):
-            continue
+        raw_date = cells[1]
+        raw_time = cells[2]
+        raw_value = cells[3]
 
-        data[(datum, vrijeme)] = vrijednost
+        date_out = normalize_date(raw_date)
+        time_out = raw_time.strip()
+
+        if mode == "vodostaj":
+            value_out = normalize_water_level(raw_value)
+        elif mode == "protok":
+            value_out = normalize_flow(raw_value)
+        else:
+            raise ValueError(f"Nepoznat mode: {mode}")
+
+        data[(date_out, time_out)] = value_out
 
     return data
 
 
-def load_existing_keys():
-    existing = set()
+def load_existing(csv_path: str) -> Dict[Tuple[str, str], Dict[str, str]]:
+    existing = {}
 
-    if not os.path.exists(OUTPUT_FILE):
+    if not os.path.exists(csv_path):
         return existing
 
-    with open(OUTPUT_FILE, "r", newline="", encoding="utf-8") as f:
-        reader = csv.reader(f, delimiter=";")
-        next(reader, None)
-
+    with open(csv_path, "r", newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f, delimiter=";")
         for row in reader:
-            if len(row) >= 2:
-                existing.add((row[0], row[1]))
+            key = (row["DATUM"].strip(), row["VRIJEME"].strip())
+            existing[key] = {
+                "DATUM": row["DATUM"].strip(),
+                "VRIJEME": row["VRIJEME"].strip(),
+                "VODOSTAJ": row["VODOSTAJ"].strip(),
+                "PROTOK": row["PROTOK"].strip(),
+            }
 
     return existing
 
 
+def merge_rows(existing, vodostaji, protoci):
+    merged = dict(existing)
+
+    common_keys = set(vodostaji.keys()) & set(protoci.keys())
+
+    for key in common_keys:
+        datum, vrijeme = key
+        merged[key] = {
+            "DATUM": datum,
+            "VRIJEME": vrijeme,
+            "VODOSTAJ": vodostaji[key],
+            "PROTOK": protoci[key],
+        }
+
+    return merged
+
+
+def sort_key(item):
+    row = item[1]
+    dt = datetime.strptime(f"{row['DATUM']} {row['VRIJEME']}", "%d.%m.%Y %H:%M")
+    return dt
+
+
+def save_csv(csv_path: str, rows_dict):
+    rows = [item[1] for item in sorted(rows_dict.items(), key=sort_key, reverse=True)]
+
+    with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["DATUM", "VRIJEME", "VODOSTAJ", "PROTOK"],
+            delimiter=";",
+        )
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def main():
-    vodostaj = fetch_data(URLS["vodostaj"])
-    protok = fetch_data(URLS["protok"])
+    html_vodostaj = fetch_html(URL_VODOSTAJ)
+    html_protok = fetch_html(URL_PROTOK)
 
-    existing = load_existing_keys()
-    file_exists = os.path.exists(OUTPUT_FILE)
+    vodostaji = parse_table(html_vodostaj, "vodostaj")
+    protoci = parse_table(html_protok, "protok")
 
-    all_keys = sorted(set(vodostaj.keys()) | set(protok.keys()), reverse=True)
+    existing = load_existing(CSV_PATH)
+    merged = merge_rows(existing, vodostaji, protoci)
 
-    with open(OUTPUT_FILE, "a", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f, delimiter=";")
-
-        if not file_exists:
-            writer.writerow(["datum", "vrijeme", "vodostaj", "protok"])
-
-        inserted = 0
-
-        for key in all_keys:
-            if key in existing:
-                continue
-
-            datum, vrijeme = key
-            writer.writerow([
-                datum,
-                vrijeme,
-                vodostaj.get(key, ""),
-                protok.get(key, "")
-            ])
-            inserted += 1
-
-    print(f"Upisano novih redova: {inserted}")
+    save_csv(CSV_PATH, merged)
+    print(f"Gotovo. Ukupno redaka: {len(merged)}")
 
 
 if __name__ == "__main__":
