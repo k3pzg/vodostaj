@@ -2,7 +2,7 @@ name: Scrape vodostaj i protok
 
 on:
   schedule:
-    - cron: "0 * * * *"
+    - cron: "7 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -20,12 +20,35 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
 
       - name: Install dependencies
         run: pip install -r requirements.txt
 
       - name: Run scraper
-        run: python scraper.py
+        run: |
+          attempt=1
+          max_attempts=3
+
+          until [ "$attempt" -gt "$max_attempts" ]; do
+            echo "Scraper attempt $attempt/$max_attempts"
+            if python scraper.py; then
+              echo "Scraper succeeded on attempt $attempt"
+              exit 0
+            fi
+
+            echo "Scraper failed on attempt $attempt"
+
+            if [ "$attempt" -lt "$max_attempts" ]; then
+              echo "Waiting 60 seconds before retry..."
+              sleep 60
+            fi
+
+            attempt=$((attempt + 1))
+          done
+
+          echo "Scraper failed after $max_attempts attempts"
+          exit 1
 
       - name: Commit and push if changed
         run: |
