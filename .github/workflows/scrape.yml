@@ -9,8 +9,8 @@ on:
 permissions:
   contents: write
 
-# Do not let two runs update the CSV from the same parent commit. Without this,
-# the slower run is rejected by GitHub with exit code 128 when it tries to push.
+# Prevent overlapping scraper runs. Other actors may still update main while a
+# run is in progress, so the push step below also rebases and retries.
 concurrency:
   group: scrape-${{ github.ref }}
   cancel-in-progress: false
@@ -25,6 +25,7 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -64,6 +65,8 @@ jobs:
         env:
           TARGET_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
+          set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add vodostaj_protok.csv
@@ -74,4 +77,27 @@ jobs:
           fi
 
           git commit -m "Update vodostaj_protok.csv"
-          git push origin "HEAD:${TARGET_BRANCH}"
+
+          # main may have moved while the scraper was running (for example a
+          # manual/Codex commit). Rebase our CSV commit onto the latest main.
+          # Retry because main can theoretically move again between rebase and push.
+          max_push_attempts=5
+          for attempt in $(seq 1 "$max_push_attempts"); do
+            echo "Push attempt $attempt/$max_push_attempts"
+
+            git fetch origin "$TARGET_BRANCH"
+            git rebase "origin/$TARGET_BRANCH"
+
+            if git push origin "HEAD:${TARGET_BRANCH}"; then
+              echo "Push succeeded."
+              exit 0
+            fi
+
+            if [ "$attempt" -lt "$max_push_attempts" ]; then
+              echo "Remote moved again; retrying..."
+              sleep 2
+            fi
+          done
+
+          echo "Push failed after $max_push_attempts attempts."
+          exit 1
