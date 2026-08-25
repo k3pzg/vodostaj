@@ -1,4 +1,5 @@
 name: Scrape vodostaj i protok
+run-name: Scrape vodostaj i protok (${{ github.sha }})
 
 on:
   schedule:
