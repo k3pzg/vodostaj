@@ -20,8 +20,3 @@ Novi run s aktualnim workflowom u koraku **Checkout** prikazuje
 Za stvarni uzrok neuspjeha otvorite posao **scrape** i proširite prvi korak s
 crvenim znakom. Poruka `Process completed with exit code 1` u sažetku označava
 samo završni status i ne sadrži izvornu poruku greške.
-
-Ako netko promijeni zadanu granu nakon checkouta, workflow će pri odbijenom
-pushu dohvatiti novu verziju grane, spojiti mjerenja iz oba CSV-a i pokušati
-ponovno. Time se čuvaju i udaljena i upravo dohvaćena mjerenja umjesto primjene
-prisilnog pusha koji bi mogao obrisati tuđe promjene.

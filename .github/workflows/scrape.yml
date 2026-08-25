@@ -66,29 +66,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          cp vodostaj_protok.csv "$RUNNER_TEMP/scraped.csv"
+          git add vodostaj_protok.csv
 
-          for attempt in 1 2 3 4 5; do
-            git add vodostaj_protok.csv
+          if git diff --cached --quiet; then
+            echo "No data changes to commit."
+            exit 0
+          fi
 
-            if git diff --cached --quiet; then
-              echo "No data changes to commit."
-              exit 0
-            fi
-
-            git commit -m "Update vodostaj_protok.csv"
-
-            if git push origin "HEAD:${TARGET_BRANCH}"; then
-              exit 0
-            fi
-
-            if [ "$attempt" -eq 5 ]; then
-              echo "Push failed after $attempt attempts."
-              exit 1
-            fi
-
-            echo "Remote branch changed; merging its measurements and retrying."
-            git fetch origin "$TARGET_BRANCH"
-            git reset --hard "origin/$TARGET_BRANCH"
-            python merge_csv.py vodostaj_protok.csv "$RUNNER_TEMP/scraped.csv"
-          done
+          git commit -m "Update vodostaj_protok.csv"
+          git push origin "HEAD:${TARGET_BRANCH}"
