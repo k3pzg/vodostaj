@@ -518,7 +518,8 @@ function buildChart(canvasId, labels, values, color, unit) {
         borderWidth: 2,
         backgroundColor: gradient,
         fill: true,
-        tension: 0.35,
+        tension: 0,
+        spanGaps: false,
         pointRadius: values.length > 100 ? 0 : 3,
         pointHoverRadius: 5,
         pointBackgroundColor: color,
@@ -603,7 +604,23 @@ function updateTable(filtered) {
   `).join("");
 }
 
+// Null placeholders are display gaps, never saved or estimated measurements.
+function chartRows(rows) {
+  const result = [];
+  for (const row of rows) {
+    const previous = result[result.length - 1];
+    if (previous) {
+      for (let t = previous.dt.getTime() + 3600000; t < row.dt.getTime(); t += 3600000) {
+        result.push({dt: new Date(t), vodostaj: NaN, protok: NaN});
+      }
+    }
+    result.push(row);
+  }
+  return result;
+}
+
 function renderCharts(filtered) {
+  filtered = chartRows(filtered);
   const labels = filtered.map(r => formatLabel(r.dt));
   const wlVals = filtered.map(r => isNaN(r.vodostaj) ? null : r.vodostaj);
   const flVals = filtered.map(r => isNaN(r.protok) ? null : r.protok);
