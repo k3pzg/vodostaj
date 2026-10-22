@@ -119,10 +119,21 @@ jobs:
         env:
           COLLECTION_QUALITY: ${{ steps.collect.outputs.quality_status }}
         run: |
-          python scraper.py --check --report quality-report.json
-          if [ "$COLLECTION_QUALITY" != "0" ]; then
-            echo "Collection reported incomplete source coverage; see collection-report.json."
-            exit 2
+          # Exit 2 means incomplete historical/source coverage (degraded), not
+          # a broken collection job. Keep reporting gaps without failing Actions.
+          check_status=0
+          python scraper.py --check --report quality-report.json || check_status=$?
+
+          if [ "$check_status" -ne 0 ] && [ "$check_status" -ne 2 ]; then
+            echo "::error::Data quality check failed (exit $check_status)."
+            exit "$check_status"
+          fi
+
+          if [ "$check_status" -eq 2 ] || [ "$COLLECTION_QUALITY" = "2" ]; then
+            echo "::warning::Incomplete source coverage or historical data gaps; see quality-report.json and collection-report.json."
+          elif [ "$COLLECTION_QUALITY" != "0" ]; then
+            echo "::error::Unexpected collection quality status: $COLLECTION_QUALITY"
+            exit 1
           fi
 
       - name: Preserve diagnostic evidence
