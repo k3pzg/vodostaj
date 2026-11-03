@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 
-from scraper import load_existing, save_csv
+from scraper import load_existing, merge_rows, save_csv
 
 
 def merge_csv(base_path: str, incoming_path: str) -> int:
@@ -12,7 +12,11 @@ def merge_csv(base_path: str, incoming_path: str) -> int:
     if not incoming_rows:
         raise ValueError(f"Ulazni CSV nema valjanih mjerenja: {incoming_path}")
 
-    base_rows.update(incoming_rows)
+    base_rows = merge_rows(
+        base_rows,
+        {key: row["VODOSTAJ"] for key, row in incoming_rows.items() if row["VODOSTAJ"]},
+        {key: row["PROTOK"] for key, row in incoming_rows.items() if row["PROTOK"]},
+    )
     save_csv(base_path, base_rows)
     return len(base_rows)
 

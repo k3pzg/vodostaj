@@ -4,3 +4,6 @@ scrape-report.json
 collection-report.json
 quality-report.json
 source-snapshots/
+
+work/
+.venv/

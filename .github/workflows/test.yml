@@ -3,10 +3,13 @@ on:
   pull_request:
   push:
     paths:
-      - '**.py'
-      - '.github/workflows/**'
-      - 'requirements.txt'
-      - 'dashboard.html'
+      - "**.py"
+      - ".github/workflows/**"
+      - "requirements.txt"
+      - "dashboard.html"
+      - "index.html"
+      - "assets/**"
+      - "tests/**"
 permissions:
   contents: read
 jobs:
@@ -16,8 +19,14 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: "3.11"
           cache: pip
       - run: pip install -r requirements.txt
       - run: python -m unittest discover -s tests -v
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
       - run: node --test tests/dashboard.test.cjs
+      - run: pip install playwright==1.56.0
+      - run: python -m playwright install --with-deps chromium
+      - run: python tests/browser_smoke.py
