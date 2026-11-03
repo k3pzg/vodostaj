@@ -2,6 +2,13 @@ name: Scrape vodostaj i protok
 run-name: Scrape vodostaj i protok (${{ github.sha }})
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'scraper.py'
+      - 'merge_csv.py'
+      - 'requirements.txt'
+      - '.github/workflows/scrape.yml'
   schedule:
     - cron: "7 * * * *"
   # Optional external scheduler; GitHub schedule is best effort.

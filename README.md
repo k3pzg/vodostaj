@@ -36,7 +36,8 @@ prethodno učitane podatke i prikazuje upozorenje.
 
 ## Prikupljanje i ponašanje pri kvaru
 
-GitHub Actions traži pokretanje svaki sat (`7 * * * *`, UTC). GitHub ne jamči
+GitHub Actions traži pokretanje svaki sat (`7 * * * *`, UTC), a prikupljanje
+pokreće i nakon izmjene scrapera ili njegova workflowa na `main`. GitHub ne jamči
 satnu isporuku: događaji mogu kasniti ili biti odbačeni pod opterećenjem.
 Za zajamčeno neovisno pokretanje treba vanjski raspoređivač; podržan je
 `repository_dispatch` s `event_type: scrape`, ali vanjski servis nije postavljen.
