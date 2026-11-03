@@ -1,25 +1,25 @@
 {
-  "checked_at": "2026-11-03T14:37:25.621654+01:00",
+  "checked_at": "2026-11-03T16:01:38.755782+01:00",
   "sources": {
     "vodostaj": {
-      "status": "stale",
-      "count": 20,
+      "status": "ok",
+      "count": 22,
       "oldest": "01.11.2026 00:00",
-      "newest": "02.11.2026 14:00",
-      "age_hours": 24.62
+      "newest": "03.11.2026 16:00",
+      "age_hours": 0.03
     },
     "protok": {
-      "status": "stale",
-      "count": 20,
+      "status": "ok",
+      "count": 22,
       "oldest": "01.11.2026 00:00",
-      "newest": "02.11.2026 14:00",
-      "age_hours": 24.62
+      "newest": "03.11.2026 16:00",
+      "age_hours": 0.03
     }
   },
   "source_errors": {},
   "unpaired_source_hours": [],
-  "new_rows": 0,
-  "changed_rows": 0,
+  "new_rows": 2,
+  "changed_rows": 2,
   "timezone": "Europe/Zagreb",
   "lookback_hours": 168,
   "max_age_hours": 3,
@@ -70,7 +70,10 @@
       "03.11.2026 08:00",
       "03.11.2026 09:00",
       "03.11.2026 10:00",
-      "03.11.2026 11:00"
+      "03.11.2026 11:00",
+      "03.11.2026 12:00",
+      "03.11.2026 13:00",
+      "03.11.2026 14:00"
     ],
     "PROTOK": [
       "31.10.2026 04:00",
@@ -118,23 +121,23 @@
       "03.11.2026 08:00",
       "03.11.2026 09:00",
       "03.11.2026 10:00",
-      "03.11.2026 11:00"
+      "03.11.2026 11:00",
+      "03.11.2026 12:00",
+      "03.11.2026 13:00",
+      "03.11.2026 14:00"
     ]
   },
-  "freshness_errors": {
-    "VODOSTAJ": "Nesvježi ili budući podaci: ('02.11.2026', '14:00'), starost 24.62 h",
-    "PROTOK": "Nesvježi ili budući podaci: ('02.11.2026', '14:00'), starost 24.62 h"
-  },
-  "total_rows": 5421,
+  "freshness_errors": {},
+  "total_rows": 5423,
   "status": "degraded",
   "latest": {
     "VODOSTAJ": {
-      "time": "02.11.2026 14:00",
-      "age_hours": 24.62
+      "time": "03.11.2026 16:00",
+      "age_hours": 0.03
     },
     "PROTOK": {
-      "time": "02.11.2026 14:00",
-      "age_hours": 24.62
+      "time": "03.11.2026 16:00",
+      "age_hours": 0.03
     }
   }
 }
