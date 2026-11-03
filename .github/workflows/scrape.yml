@@ -52,7 +52,7 @@ jobs:
           until [ "$attempt" -gt "$max_attempts" ]; do
             echo "Scraper attempt $attempt/$max_attempts"
             status=0
-            python scraper.py --report collection-report.json --snapshot-dir source-snapshots || status=$?
+            python scraper.py --report collection-report.json --status-file scrape-status.json --snapshot-dir source-snapshots || status=$?
             if [ "$status" -eq 0 ] || [ "$status" -eq 2 ]; then
               echo "quality_status=$status" >> "$GITHUB_OUTPUT"
               echo "Collection completed; quality status: $status"
@@ -70,7 +70,9 @@ jobs:
           done
 
           echo "Scraper failed after $max_attempts attempts"
-          exit 1
+          echo "quality_status=1" >> "$GITHUB_OUTPUT"
+          # Publish failure status before marking the job as failed.
+          exit 0
 
       - name: Commit and push if changed
         env:
@@ -81,13 +83,16 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add vodostaj_protok.csv
+          if [ -f scrape-status.json ]; then git add scrape-status.json; fi
 
           if git diff --cached --quiet; then
             echo "No data changes to commit."
             exit 0
           fi
 
-          git commit -m "Update vodostaj_protok.csv"
+          git commit -m "Update measurements and collection status"
+          cp vodostaj_protok.csv "$RUNNER_TEMP/collected.csv"
+          if [ -f scrape-status.json ]; then cp scrape-status.json "$RUNNER_TEMP/collected-status.json"; fi
 
           # main may have moved while the scraper was running (for example a
           # manual/Codex commit). Rebase our CSV commit onto the latest main.
@@ -97,7 +102,19 @@ jobs:
             echo "Push attempt $attempt/$max_push_attempts"
 
             git fetch origin "$TARGET_BRANCH"
-            git rebase "origin/$TARGET_BRANCH"
+            if ! git rebase "origin/$TARGET_BRANCH"; then
+              git rebase --abort
+              # Only our generated files are replaced; preserve concurrent code changes.
+              git reset --hard "origin/$TARGET_BRANCH"
+              python merge_csv.py vodostaj_protok.csv "$RUNNER_TEMP/collected.csv"
+              if [ -f "$RUNNER_TEMP/collected-status.json" ]; then
+                cp "$RUNNER_TEMP/collected-status.json" scrape-status.json
+              fi
+              git add vodostaj_protok.csv scrape-status.json
+              if ! git diff --cached --quiet; then
+                git commit -m "Update measurements and collection status"
+              fi
+            fi
 
             if git push origin "HEAD:${TARGET_BRANCH}"; then
               echo "Push succeeded."
@@ -119,6 +136,10 @@ jobs:
         env:
           COLLECTION_QUALITY: ${{ steps.collect.outputs.quality_status }}
         run: |
+          if [ "$COLLECTION_QUALITY" = "1" ]; then
+            echo "::error::Collection failed. Existing measurements were preserved where possible; see collection-report.json."
+            exit 1
+          fi
           # Exit 2 means incomplete historical/source coverage (degraded), not
           # a broken collection job. Keep reporting gaps without failing Actions.
           check_status=0
@@ -130,7 +151,7 @@ jobs:
           fi
 
           if [ "$check_status" -eq 2 ] || [ "$COLLECTION_QUALITY" = "2" ]; then
-            echo "::warning::Incomplete source coverage or historical data gaps; see quality-report.json and collection-report.json."
+            echo "::warning::Delayed/unavailable source or incomplete measurement coverage; see quality-report.json and collection-report.json."
           elif [ "$COLLECTION_QUALITY" != "0" ]; then
             echo "::error::Unexpected collection quality status: $COLLECTION_QUALITY"
             exit 1
@@ -138,12 +159,13 @@ jobs:
 
       - name: Preserve diagnostic evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: scrape-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             collection-report.json
             quality-report.json
+            scrape-status.json
             source-snapshots/
           if-no-files-found: ignore
           retention-days: 30

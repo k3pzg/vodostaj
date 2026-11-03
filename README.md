@@ -1,81 +1,111 @@
-# Vodostaj
+# Ilova · vodostaj i protok
 
-## GitHub Actions scraper
+Pregled satnih mjerenja postaje **Ilova – Maslenjača (43)** u području Končanice.
+Podaci se prikupljaju s javnih stranica Hrvatskih voda i čuvaju u
+`vodostaj_protok.csv`. Nema interpolacije ni izmišljanja nedostajućih mjerenja.
 
-Scraper se automatski pokreće svaki sat, a može se pokrenuti i ručno na stranici
-**Actions → Scrape vodostaj i protok → Run workflow**.
+**[Otvori dashboard](https://k3pzg.github.io/vodostaj/dashboard.html)** ·
+[Izvorni vodostaj](https://mvodostaji.voda.hr/Home/PregledVodostajaPostaje?sektorID=4&bpID=6&postajaID=43) ·
+[Izvorni protok](https://mvodostaji.voda.hr/Home/PregledProtokaPostaje?sektorID=4&bpID=6&postajaID=43)
 
-> [!IMPORTANT]
-> Opcija **Re-run jobs** ponovno izvršava isti commit i istu verziju workflowa
-> kao izvorno pokretanje. Zato se stari neuspjeli run (primjerice commit
-> `7486fe4`) ne može koristiti za provjeru naknadnog popravka workflowa. Nakon
-> što je popravak spojen na zadanu granu, pokrenite potpuno novi run pomoću
-> gumba **Run workflow** i odaberite zadanu granu.
+## Dashboard
 
-Novi run s aktualnim workflowom u koraku **Checkout** prikazuje
-`actions/checkout@v5`, a u koraku **Setup Python** prikazuje
-`actions/setup-python@v6`. Ako run i dalje prikazuje `checkout@v4` i
-`setup-python@v5`, izvršava staru verziju workflowa.
+- Posljednji poznati vodostaj i protok, svaki s vlastitim vremenom i starošću.
+- Jasno upozorenje kad podatak kasni više od 3 sata. Osvježavanje stranice nije
+  dokaz novog mjerenja; vrijeme učitavanja prikazano je zasebno.
+- Promjena prema istom lokalnom satu prethodnog dana, samo ako oba mjerenja postoje.
+- Brzi rasponi (24 sata, 3/7/30 dana, cijela arhiva), vlastiti datumi i opcija
+  **Do zadnjeg mjerenja** za povijesni pregled tijekom kašnjenja izvora.
+- Satni grafovi i dnevni prosjeci. Opis dnevne točke navodi broj dostupnih uzoraka.
+  Prekidi ostaju vidljivi; dnevni prosjek nepotpunog dana nije potpun dnevni podatak.
+- Minimum, maksimum i prosjek odabranog razdoblja za oba mjerenja.
+- Popunjenost oba niza i popis nedostajućih sati. Posljednja 3 sata izuzeta su
+  iz provjere praznina zbog mogućeg kašnjenja objave. Jesenski ponovljeni sat
+  računa se jednom jer CSV ne sadrži UTC odmak.
+- Paginirana tablica, redoslijed, prikaz nepotpunih redaka i CSV izvoz **svih
+  odabranih satnih redaka**, ne samo trenutačne stranice. Filtar nepotpunih redaka
+  odnosi se samo na tablicu; potpuno nedostajući sati navedeni su iznad nje.
+- Svijetla/tamna tema, mobilni prikaz, tipkovnička navigacija i ručno osvježavanje.
 
-Za stvarni uzrok neuspjeha otvorite posao **scrape** i proširite prvi korak s
-crvenim znakom. Poruka `Process completed with exit code 1` u sažetku označava
-samo završni status i ne sadrži izvornu poruku greške.
+Sva vremena mjerenja tumače se i prikazuju u `Europe/Zagreb`, bez obzira na
+vremensku zonu uređaja. Podaci se dohvaćaju iz datoteka uz dashboard pa je moguće
+pregledati i vlastitu granu lokalno. Chart.js 4.4.9 i njegova MIT licenca nalaze
+se u `assets/vendor/`; nisu potrebni CDN ni vanjski fontovi. Dashboard se
+osvježava svakih 5 minuta dok je kartica vidljiva. Neuspjelo osvježavanje čuva
+prethodno učitane podatke i prikazuje upozorenje.
 
-## Pouzdanost i provjera podataka
+## Prikupljanje i ponašanje pri kvaru
 
-Raspored `7 * * * *` traži satno pokretanje u UTC-u, ali GitHub Actions ne jamči
-satnu isporuku. Događaji se mogu odgoditi ili odbaciti pod opterećenjem
-([GitHub dokumentacija](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)).
-Ponavljanje unutar posla ne pomaže ako posao uopće nije pokrenut. Za obvezno satno
-prikupljanje potreban je neovisan raspoređivač i nadzor koji se izvršava izvan
-ovog workflowa. Workflow prihvaća `repository_dispatch` s `event_type: scrape`
-kao ulaz za takav raspoređivač; vanjski servis nije postavljen ovom izmjenom.
+GitHub Actions traži pokretanje svaki sat (`7 * * * *`, UTC). GitHub ne jamči
+satnu isporuku: događaji mogu kasniti ili biti odbačeni pod opterećenjem.
+Za zajamčeno neovisno pokretanje treba vanjski raspoređivač; podržan je
+`repository_dispatch` s `event_type: scrape`, ali vanjski servis nije postavljen.
 
-Scraper provjerava oba izvora, datume, pune sate, brojčane vrijednosti i svježinu
-najnovijeg mjerenja. Pretpostavlja lokalno vrijeme postaje `Europe/Zagreb`,
-a ne vrijeme računala koje izvršava scraper. Zadani prag svježine je 3 sata;
-može se promijeniti argumentom `--max-age-hours`. Do jedan sat budućeg vremena
-prihvaća se kao tolerancija za sat izvora. Praznine se traže za svaki stupac
-zasebno u posljednjih 168 sati. Unutarnje praznine otkrivaju se odmah, a na kraju
-niza dopušteno je zadano kašnjenje objave. `--lookback-hours` proširuje provjeru.
+Scraper provjerava strukturu izvora, datume, pune sate, numeričke vrijednosti,
+duplikate i buduće oznake. Jedan sat u budućnosti dopušten je kao tolerancija.
+Dva se izvora obrađuju **neovisno**:
 
-```sh
-python scraper.py
-python scraper.py --check --report quality-report.json
-python scraper.py --check --lookback-hours 720
-python -m unittest discover -s tests -v
-node --test tests/dashboard.test.cjs
-```
+| Stanje | Ponašanje |
+| --- | --- |
+| Oba izvora uredna | Spremi dostupna mjerenja i provjeri praznine. |
+| Izvor kasni | Spremi valjana mjerenja, prijavi kašnjenje; nema beskorisnog ponavljanja samo zbog starosti. |
+| Jedan izvor nedostupan/neispravan | Spremi drugi, očuvaj ranije poznata polja i prijavi problem. |
+| Oba izvora nedostupna/neispravna | Očuvaj CSV, ponovi dohvat, objavi status greške i označi workflow neuspješnim. |
+| Neispravan postojeći CSV ili kvar zapisivanja | Prekini s greškom; ne prikazuj uspješno prikupljanje. |
 
-Izlazni kodovi:
+Zapisi su atomarni; nepromijenjeni CSV se ne prepisuje. Prazno polje iz djelomičnog
+uvoza ne briše poznatu vrijednost drugog mjerenja. Workflow pri istodobnim
+izmjenama prvo pokušava rebase, a kod sukoba spaja prikupljene vrijednosti u
+aktualnu granu umjesto odbacivanja tuđih promjena koda.
+
+`scrape-status.json` objavljuje vrijeme **pokušaja**, stanja pojedinih izvora i
+kvalitetu arhive za dashboard. Generira ga workflow i sprema uz CSV, čak i kad
+oba izvora zakažu (ako spremanje/slanje uspije). Nedostupan status ne blokira
+prikaz arhive. Sažetak Actions posla prikazuje kratke nalaze; izvještaji i
+izvorni HTML dostupni su 30 dana u artefaktu `scrape-diagnostics-*`.
+
+### Izlazni kodovi
 
 | Kod | Značenje |
 | --- | --- |
-| 0 | Dohvat/provjera uspješni, podaci svježi, nema pronađenih praznina. Nova mjerenja nisu nužna ako je postojeći niz još svjež. |
-| 1 | Neuspješan dohvat, parsiranje, validacija ili zapis. CSV se ne zamjenjuje ako dohvat/validacija ne uspiju. |
-| 2 | Provjera je pronašla praznine, nesvjež CSV ili nepodudarne sate dvaju izvora. Kod prikupljanja valjani dohvaćeni podaci već su spremljeni. |
+| 0 | Izvori i provjera uredni. Nova mjerenja nisu nužna ako je niz svjež. |
+| 1 | Oba izvora neupotrebljiva ili ozbiljna greška CSV-a/zapisa. |
+| 2 | Kašnjenje, djelomični dohvat, nepodudarni sati ili praznine; valjana mjerenja spremljena su. |
 
-Ako samo jedan izvor ima mjerenje za pojedini sat, čuva se raspoloživa vrijednost,
-a drugi stupac ostaje prazan ili zadržava ranije poznatu vrijednost. Sljedeći
-dohvat može dopuniti prazno polje isključivo stvarnim izvornim mjerenjem.
-Nema interpolacije, pretvaranja praznine u nulu ni kopiranja susjednih vrijednosti.
-Zapisi se zamjenjuju atomarno; pogreška pisanja ne smije skratiti postojeći CSV.
+Kod 2 u Actions daje upozorenje, a kod 1 nakon ponavljanja daje grešku.
+`--check` samo čita CSV, provjerava kvalitetu i zapisuje izvještaj; ne dohvaća izvor.
+Zadani prozor provjere je 168 sati, a prag svježine 3 sata.
 
-Workflow prvo sprema i šalje valjana mjerenja, a zatim provjerava kvalitetu.
-**Crveni workflow zbog praznina zato može imati uspješno spremljena nova mjerenja.**
-Poznate praznine ostaju prijavljene dok su unutar razdoblja provjere. To ne
-zaustavlja buduće prikupljanje. Sažetak posla i artefakt `scrape-diagnostics-*`
-sadrže JSON izvještaje i dohvaćeni HTML (čuvanje 30 dana), uključujući broj novih
-i promijenjenih redaka te najstarije/najnovije vrijeme izvora. `--check` samo čita
-CSV i zapisuje izvještaj. Ne pokreće mrežni dohvat.
+CSV nema UTC odmak pa ne razlikuje dva jesenska mjerenja istog lokalnog sata.
+Proturječni duplikati u izvoru odbijaju se. Pri proljetnoj promjeni sata ne
+prijavljuje se nepostojeći sat. Za potpunu razradu jesenske dvosmislenosti treba
+potvrda operatora o vremenu izvora i migracija formata.
 
-Pri proljetnom pomicanju sata ne prijavljuje se nepostojeći lokalni sat. Postojeći
-format CSV-a nema UTC odmak i ne može razlikovati dva jesenska mjerenja s istom
-lokalnom oznakom sata. Proturječni duplikati odbijaju se; potpuno razrješenje
-zahtijeva potvrdu vremenske zone izvora i migraciju formata s odmakom.
+## Lokalno pokretanje i provjera
 
-Graf koristi ravne segmente i prekida liniju na nedostajućim satima. Prazne točke
-služe samo prikazu i ne zapisuju se u CSV.
+Potreban je Python 3.11+ i Node.js 24 za JS provjere.
 
-Nalazi pregleda od 22.10.2026. i granice mogućeg oporavka opisani su u
-[docs/reliability-2026-10-22.md](docs/reliability-2026-10-22.md).
+```sh
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+python -m unittest discover -s tests -v
+node --test tests/dashboard.test.cjs
+# Opcionalne provjere u pregledniku (iste pokreće CI):
+pip install playwright==1.56.0
+python -m playwright install chromium
+python tests/browser_smoke.py
+python scraper.py --report collection-report.json --status-file scrape-status.json
+python scraper.py --check --report quality-report.json
+python -m http.server 8000
+```
+
+Otvori `http://localhost:8000/dashboard.html`. `index.html` vodi na isti pregled.
+Za siguran probni dohvat koristi kopiju CSV-a i `--csv putanja/do/kopije.csv`.
+
+Nakon izmjene workflowa pokreni **Actions → Scrape vodostaj i protok → Run
+workflow** na `main`. **Re-run jobs** ponavlja stari commit i stari workflow.
+
+Nalazi prethodnog pregleda i granice oporavka povijesnih podataka:
+[22.10.2026.](docs/reliability-2026-10-22.md). Aktualni pregled:
+[3.11.2026.](docs/review-2026-11-03.md).

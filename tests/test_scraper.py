@@ -115,13 +115,51 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(self.run_main([html(keys), html(keys, '0,08')]), 0)
         self.assertEqual(json.loads(self.report.read_text())['new_rows'], 0)
 
-    def test_fetch_parse_or_stale_error_preserves_csv_bytes(self):
+    def test_both_sources_fail_preserves_csv_bytes(self):
         before = self.csv.read_bytes()
-        for sources in ([RuntimeError('offline')], ['bad html'], [html([key(1)])]):
+        for sources in ([RuntimeError('offline'), RuntimeError('offline')], ['bad html', 'bad html'], [html([key(12)]), html([key(12)])]):
             with self.subTest(sources=sources):
                 self.assertEqual(self.run_main(sources), 1)
                 self.assertEqual(self.csv.read_bytes(), before)
                 self.assertEqual(json.loads(self.report.read_text())['status'], 'error')
+
+    def test_delayed_sources_are_saved_and_reported_without_hard_failure(self):
+        self.csv.unlink()
+        self.assertEqual(self.run_main([html([key(1)]), html([key(1)], '0,08')]), 2)
+        self.assertIn(key(1), s.load_existing(self.csv))
+        report = json.loads(self.report.read_text())
+        self.assertEqual(report['sources']['vodostaj']['status'], 'stale')
+        self.assertEqual(report['status'], 'degraded')
+
+    def test_one_source_failure_still_saves_other_and_publishes_status(self):
+        status = self.csv.parent / 'status.json'
+        self.assertEqual(self.run_main([html([key(9)]), RuntimeError('offline')],
+                                      ['--status-file', str(status)]), 2)
+        rows = s.load_existing(self.csv)
+        self.assertEqual(rows[key(9)]['VODOSTAJ'], '11,0')
+        self.assertEqual(rows[key(9)]['PROTOK'], '')
+        self.assertEqual(rows[key(8)]['PROTOK'], '0,08')
+        report = json.loads(status.read_text())
+        self.assertEqual(report['source_errors'], {'protok': 'offline'})
+        self.assertEqual(report['latest']['VODOSTAJ']['time'], '22.10.2026 09:00')
+
+    def test_stale_source_does_not_block_fresh_counterpart(self):
+        self.assertEqual(self.run_main([html([key(1)]), html([key(9)], '0,09')]), 2)
+        self.assertEqual(s.load_existing(self.csv)[key(9)]['PROTOK'], '0,09')
+
+    def test_unchanged_stale_source_does_not_rewrite_csv(self):
+        keys = [key(h) for h in range(5, 9)]
+        later = NOW + timedelta(hours=12)
+        with patch('scraper.local_now', return_value=later), patch('scraper.fetch_html',
+                    side_effect=[html(keys), html(keys, '0,08')]), patch('scraper.save_csv') as save:
+            self.assertEqual(s.main(self.args), 2)
+            save.assert_not_called()
+
+    def test_failure_status_is_published_for_dashboard(self):
+        status = self.csv.parent / 'status.json'
+        self.assertEqual(self.run_main([RuntimeError('offline'), RuntimeError('offline')],
+                                      ['--status-file', str(status)]), 1)
+        self.assertEqual(json.loads(status.read_text())['status'], 'error')
 
     def test_valid_observations_saved_despite_gaps(self):
         self.csv.unlink()
@@ -147,6 +185,18 @@ class CommandTests(unittest.TestCase):
             s.save_csv(self.csv, {})
         self.assertEqual(self.csv.read_bytes(), before)
         self.assertEqual(sorted(p.name for p in self.csv.parent.iterdir()), ['data.csv'])
+
+
+class MergeCommandTests(unittest.TestCase):
+    def test_partial_import_never_erases_existing_counterpart(self):
+        from merge_csv import merge_csv
+        with tempfile.TemporaryDirectory() as directory:
+            base, incoming = Path(directory, 'base.csv'), Path(directory, 'incoming.csv')
+            s.save_csv(base, s.merge_rows({}, {key(8): '11,0'}, {key(8): '0,08'}))
+            s.save_csv(incoming, s.merge_rows({}, {key(8): '12,0'}, {}))
+            merge_csv(base, incoming)
+            self.assertEqual(s.load_existing(base)[key(8)]['PROTOK'], '0,08')
+            self.assertEqual(s.load_existing(base)[key(8)]['VODOSTAJ'], '12,0')
 
 
 if __name__ == '__main__':
