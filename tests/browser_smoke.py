@@ -38,6 +38,7 @@ def main():
                 page.route('**/scrape-status.json?*', lambda route: route.fulfill(status=200, json={
                     'checked_at': '2026-11-03T12:00:00+01:00', 'status': 'degraded',
                     'source_errors': {'protok': 'offline'},
+                    'sources': {'vodostaj': {'status': 'stale'}},
                 }))
                 page.goto(url)
                 page.wait_for_function("document.getElementById('water-value').textContent === '29,0'")
@@ -87,6 +88,17 @@ def main():
             page.route('**/vodostaj_protok.csv?*', lambda route: route.fulfill(status=200, body=CSV))
             page.locator('#refresh').click()
             page.wait_for_function("document.getElementById('water-value').textContent === '29,0'")
+            # Isolated points must remain visible even when dense charts hide regular dots.
+            large_csv = CSV + ''.join(f'\n{day:02d}.10.2026;{hour:02d}:00;20,0;0,36' for day in range(27, 32) for hour in range(24))
+            page.route('**/vodostaj_protok.csv?*', lambda route: route.fulfill(status=200, body=large_csv))
+            page.locator('#refresh').click()
+            page.wait_for_function("!document.getElementById('refresh').disabled")
+            page.locator('#presets button[data-hours="0"]').click()
+            assert page.evaluate("""() => {
+                const chart = Chart.getChart('chart-flow');
+                const data = chart.data.datasets[0].data;
+                return data.length > 100 && chart.getDatasetMeta(0).data.at(-2).options.radius > 0;
+            }""")
             assert not errors, errors
             print('PASS: initial failure and recovery; no JavaScript errors')
             browser.close()

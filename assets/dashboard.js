@@ -58,9 +58,14 @@
         "Izvor sadrži buduću vremensku oznaku. Mjerenja nisu potvrđena kao svježa.";
     } else if (ages.some((a) => a > 3)) {
       type = "stale";
-      title = "Izvor kasni s mjerenjima";
+      const confirmedDelay = Object.values(state.status?.sources ?? {}).some(
+        (source) => source.status === "stale",
+      );
+      title = confirmedDelay
+        ? "Izvor kasni s mjerenjima"
+        : "Mjerenja nisu svježa";
       description =
-        "Prikazana su posljednja poznata mjerenja. Nova mjerenja mogu nedostajati; spremljena arhiva ostaje dostupna.";
+        "Prikazana su posljednja poznata mjerenja. Nova mjerenja kasne ili još nisu prikupljena; spremljena arhiva ostaje dostupna.";
     } else if (
       state.status?.status === "error" ||
       Object.keys(state.status?.source_errors ?? {}).length
@@ -158,7 +163,14 @@
               fill: true,
               tension: 0,
               spanGaps: false,
-              pointRadius: points.length < 100 ? 2 : 0,
+              pointRadius: (ctx) => {
+                const i = ctx.dataIndex;
+                const isolated =
+                  Number.isFinite(points[i]?.y) &&
+                  !Number.isFinite(points[i - 1]?.y) &&
+                  !Number.isFinite(points[i + 1]?.y);
+                return isolated ? 3 : points.length < 100 ? 2 : 0;
+              },
               pointHoverRadius: 5,
             },
           ],
