@@ -10,6 +10,12 @@ Podaci se prikupljaju s javnih stranica Hrvatskih voda i čuvaju u
 
 ## Dashboard
 
+Panel **Prikupljeni dataset** uvijek prikazuje ukupni broj i puni raspon
+prikupljenih satnih zapisa. **Preuzmi cijeli dataset (CSV)** preuzima izvornu
+arhivu neovisno o odabranim datumima i filtrima. **Prikaži cijelu arhivu**
+uklanja vremenske i tablične filtre; ista prečica dostupna je uz tablicu.
+**Preuzmi odabrano (CSV)** odnosi se samo na odabrano razdoblje.
+
 - Posljednji poznati vodostaj i protok, svaki s vlastitim vremenom i starošću.
 - Jasno upozorenje kad podatak kasni više od 3 sata. Osvježavanje stranice nije
   dokaz novog mjerenja; vrijeme učitavanja prikazano je zasebno.

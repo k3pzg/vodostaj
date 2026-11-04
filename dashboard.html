@@ -44,10 +44,7 @@
         <section class="intro" aria-labelledby="page-title">
           <div>
             <div class="eyebrow">KONČANICA · MASLENJAČA</div>
-            <h1 id="page-title">Rijeka, iz sata u sat<span>.</span></h1>
-            <p class="lead">
-              Vodostaj i protok Ilove. Jasna slika onoga što je izmjereno.
-            </p>
+            <h1 id="page-title">Ilova - Mjerna postaja Maslenjača</h1>
           </div>
           <div class="refresh-area">
             <button id="refresh" class="button">
@@ -121,6 +118,27 @@
             </svg>
           </article>
         </section>
+        <section class="panel dataset-panel" aria-labelledby="dataset-title">
+          <div>
+            <div class="eyebrow">CIJELA ARHIVA</div>
+            <h2 id="dataset-title">Prikupljeni dataset</h2>
+            <p id="dataset-summary" class="small muted">
+              Cijeli CSV prikupljenih mjerenja dostupan je za preuzimanje.
+            </p>
+          </div>
+          <div class="dataset-actions">
+            <button id="show-archive" class="button secondary" disabled>
+              Prikaži cijelu arhivu
+            </button>
+            <a
+              id="download-dataset"
+              class="button"
+              href="vodostaj_protok.csv"
+              download="ilova-maslenjaca-cijeli-dataset.csv"
+              >Preuzmi cijeli dataset (CSV) ↓</a
+            >
+          </div>
+        </section>
         <section class="explorer" aria-labelledby="explorer-title">
           <div class="section-title">
             <div>
@@ -128,7 +146,7 @@
               <h2 id="explorer-title">Kretanje rijeke</h2>
             </div>
             <button id="export" class="button secondary" disabled>
-              Preuzmi CSV ↓
+              Preuzmi odabrano (CSV) ↓
             </button>
           </div>
           <div class="filter-panel">
@@ -143,7 +161,9 @@
                 ><button data-hours="72" aria-pressed="true">3 dana</button
                 ><button data-hours="168" aria-pressed="false">7 dana</button
                 ><button data-hours="720" aria-pressed="false">30 dana</button
-                ><button data-hours="0" aria-pressed="false">Sve</button>
+                ><button data-hours="0" aria-pressed="false">
+                  Cijela arhiva
+                </button>
               </div>
               <label class="anchor"
                 ><input id="anchor" type="checkbox" /> Do zadnjeg
@@ -262,11 +282,18 @@
             <div class="table-toolbar">
               <div>
                 <h3 id="table-title">Arhiva mjerenja</h3>
-                <p class="small muted">
+                <p id="archive-scope" class="small muted">
                   Izvorne satne vrijednosti odabranog razdoblja
                 </p>
               </div>
               <div class="table-controls">
+                <button
+                  id="show-archive-table"
+                  class="button compact secondary"
+                  disabled
+                >
+                  Cijela arhiva
+                </button>
                 <label class="small"
                   ><input id="incomplete" type="checkbox" /> Samo nepotpuni
                   zapisi</label

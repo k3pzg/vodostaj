@@ -93,7 +93,12 @@
     return rows.sort((a, b) => a.dt - b.dt);
   }
   function bounds(rows, hours, now = Date.now(), anchor = false) {
-    const end = anchor && rows.length ? rows.at(-1).dt : now;
+    const end =
+      anchor && rows.length
+        ? rows.at(-1).dt
+        : !hours && rows.length
+          ? Math.max(now, rows.at(-1).dt)
+          : now;
     return { start: hours ? end - hours * HOUR : (rows[0]?.dt ?? end), end };
   }
   function filter(rows, start, end) {

@@ -131,3 +131,11 @@ test("autumn repeated hour does not cause a false chart gap", () => {
   );
   assert.equal(D.chartRows(rows).length, 2);
 });
+
+test("whole archive includes all stored rows within source clock tolerance", () => {
+  const rows = D.parseCSV(
+    head + row("02.11.2026", "14:00") + row("02.11.2026", "15:00"),
+  );
+  const range = D.bounds(rows, 0, rows.at(-1).dt - D.HOUR / 2);
+  assert.deepEqual(D.filter(rows, range.start, range.end), rows);
+});

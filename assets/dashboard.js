@@ -383,6 +383,16 @@
     );
     $("empty-state").hidden = Boolean(state.selected.length);
     $("export").disabled = !state.selected.length;
+    $("show-archive").disabled = false;
+    $("show-archive-table").disabled = false;
+    setText(
+      "dataset-summary",
+      `${state.rows.length.toLocaleString("hr-HR")} satnih zapisa · ${D.formatTime(state.rows[0].dt)} — ${D.formatTime(state.rows.at(-1).dt)}`,
+    );
+    setText(
+      "archive-scope",
+      `Prikaz ${state.selected.length.toLocaleString("hr-HR")} od ukupno ${state.rows.length.toLocaleString("hr-HR")} zapisa u datasetu. ${state.hours === 0 && !state.custom ? "Odabrana je cijela arhiva." : "Tablica prati odabrano razdoblje."}`,
+    );
     banner(now);
     updateLatest(now);
     updateCharts(state.selected, start, end);
@@ -468,6 +478,20 @@
         ),
       );
   }
+  function showArchive() {
+    state.hours = 0;
+    state.custom = null;
+    $("anchor").checked = false;
+    $("incomplete").checked = false;
+    $("table-sort").value = "desc";
+    $("filter-error").hidden = true;
+    resetPage();
+    presets();
+    render();
+    $("table-title").scrollIntoView({ block: "start" });
+  }
+  $("show-archive").addEventListener("click", showArchive);
+  $("show-archive-table").addEventListener("click", showArchive);
   $("presets").addEventListener("click", (event) => {
     const btn = event.target.closest("button[data-hours]");
     if (!btn) return;
