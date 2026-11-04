@@ -33,6 +33,70 @@ class QuietHandler(SimpleHTTPRequestHandler):
         pass
 
 
+
+def assert_zoom(page, start, end):
+    for field in ('water', 'flow'):
+        bounds = page.evaluate("""id => {
+            const x = Chart.getChart('chart-' + id).scales.x;
+            return [x.min, x.max];
+        }""", field)
+        expected = page.evaluate("values => values.map(value => Date.parse(value))", [start, end])
+        assert bounds == expected, (field, bounds, expected)
+
+
+def drag_range(page, field, start, end, cancel=False):
+    page.locator('#chart-' + field).scroll_into_view_if_needed()
+    points = page.evaluate("""({field, start, end}) => {
+        const chart = Chart.getChart('chart-' + field);
+        const r = chart.canvas.getBoundingClientRect();
+        const x = stamp => r.left + chart.scales.x.getPixelForValue(Date.parse(stamp)) * r.width / chart.width;
+        return {from: x(start), to: x(end), y: r.top + (chart.chartArea.top + chart.chartArea.bottom) / 2 * r.height / chart.height};
+    }""", {'field': field, 'start': start, 'end': end})
+    page.mouse.move(points['from'], points['y'])
+    page.mouse.down()
+    page.mouse.move(points['to'], points['y'], steps=8)
+    assert page.locator('#chart-' + field).evaluate("canvas => canvas.classList.contains('is-selecting')")
+    if cancel:
+        page.keyboard.press('Escape')
+    page.mouse.up()
+
+
+def check_zoom(page):
+    # Same local times must produce the same UTC axes in every browser timezone.
+    page.fill('#date-from', '2026-11-01T04:00')
+    page.fill('#date-to', '2026-11-01T08:00')
+    page.locator('#date-form button[type="submit"]').click()
+    assert_zoom(page, '2026-11-01T03:00Z', '2026-11-01T07:00Z')
+    assert '5 satnih zapisa' in page.locator('#period-count').inner_text()
+    page.locator('#reset-zoom').click()
+    assert page.locator('#reset-zoom').is_disabled()
+    drag_range(page, 'water', '2026-11-01T03:00Z', '2026-11-01T11:00Z')
+    assert_zoom(page, '2026-11-01T03:00Z', '2026-11-01T11:00Z')
+    assert page.locator('#date-from').input_value() == '2026-11-01T04:00'
+    assert page.locator('#date-to').input_value() == '2026-11-01T12:00'
+    # Reverse drag on the other graph must update both, and refresh must keep it.
+    drag_range(page, 'flow', '2026-11-01T09:00Z', '2026-11-01T05:00Z')
+    assert_zoom(page, '2026-11-01T05:00Z', '2026-11-01T09:00Z')
+    page.locator('#refresh').click()
+    page.wait_for_function("!document.getElementById('refresh').disabled")
+    assert_zoom(page, '2026-11-01T05:00Z', '2026-11-01T09:00Z')
+    page.locator('#theme').click()
+    assert_zoom(page, '2026-11-01T05:00Z', '2026-11-01T09:00Z')
+    page.locator('#reset-zoom').click()
+    drag_range(page, 'water', '2026-11-01T03:00Z', '2026-11-01T11:00Z', cancel=True)
+    assert page.locator('#reset-zoom').is_disabled()
+    # Daily points and short, empty ranges still obey exact requested axes.
+    page.select_option('#aggregation', 'daily')
+    page.fill('#date-from', '2026-11-01T07:15')
+    page.fill('#date-to', '2026-11-01T07:45')
+    page.locator('#date-form button[type="submit"]').click()
+    assert_zoom(page, '2026-11-01T06:15Z', '2026-11-01T06:45Z')
+    assert page.locator('#empty-state').is_visible()
+    page.locator('#reset-zoom').click()
+    page.select_option('#aggregation', 'hourly')
+    print('PASS: manual times, drag on both graphs/directions, reset, Escape, refresh and exact empty zoom')
+
+
 def main():
     server = ThreadingHTTPServer(('127.0.0.1', 0), partial(QuietHandler, directory=str(ROOT)))
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -63,6 +127,7 @@ def main():
                 assert page.locator('#page-title').inner_text() == 'Ilova - Mjerna postaja Maslenjača'
                 assert page.get_by_text('Vodostaj i protok Ilove. Jasna slika onoga što je izmjereno.').count() == 0
                 assert '28 satnih zapisa' in page.locator('#dataset-summary').inner_text()
+                check_zoom(page)
                 page.locator('#presets button[data-hours="24"]').click()
                 page.locator('#anchor').check()
                 page.locator('#incomplete').check()
@@ -95,13 +160,13 @@ def main():
                 page.locator('#incomplete').check()
                 assert '1–1 od 1' in page.locator('#table-count').inner_text()
                 page.locator('#incomplete').uncheck()
-                page.fill('#date-from', '2026-11-03'); page.fill('#date-to', '2026-11-03')
-                page.locator('#date-form button').click()
+                page.fill('#date-from', '2026-11-03T00:00'); page.fill('#date-to', '2026-11-03T12:00')
+                page.locator('#date-form button[type="submit"]').click()
                 assert page.locator('#empty-state').is_visible()
                 assert page.locator('#export').is_disabled()
                 assert page.locator('#water-value').inner_text() == '29,0'
-                page.fill('#date-from', '2026-11-02'); page.fill('#date-to', '2026-11-01')
-                page.locator('#date-form button').click()
+                page.fill('#date-from', '2026-11-02T00:00'); page.fill('#date-to', '2026-11-01T12:00')
+                page.locator('#date-form button[type="submit"]').click()
                 assert page.locator('#filter-error').is_visible()
                 page.locator('#presets button[data-hours="24"]').click()
                 page.locator('#anchor').check()

@@ -20,6 +20,11 @@ uklanja vremenske i tablične filtre; ista prečica dostupna je uz tablicu.
 - Jasno upozorenje kad podatak kasni više od 3 sata. Osvježavanje stranice nije
   dokaz novog mjerenja; vrijeme učitavanja prikazano je zasebno.
 - Promjena prema istom lokalnom satu prethodnog dana, samo ako oba mjerenja postoje.
+- Zumiranje povlačenjem miša po bilo kojem grafu (u oba smjera) ili unosom
+  početnog i završnog datuma **i vremena**. Oba grafa, statistike i tablica
+  prate isti raspon. **Vrati prikaz** vraća odabrani brzi raspon; Esc odustaje
+  od povlačenja. Na dodirnim uređajima raspon se može zadati kućicama, bez
+  blokiranja pomicanja stranice.
 - Brzi rasponi (24 sata, 3/7/30 dana, cijela arhiva), vlastiti datumi i opcija
   **Do zadnjeg mjerenja** za povijesni pregled tijekom kašnjenja izvora.
 - Satni grafovi i dnevni prosjeci. Opis dnevne točke navodi broj dostupnih uzoraka.

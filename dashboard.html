@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="assets/dashboard.css" />
     <script defer src="assets/vendor/chart.umd.min.js"></script>
     <script defer src="assets/data.js"></script>
+    <script defer src="assets/chart-range.js"></script>
     <script defer src="assets/dashboard.js"></script>
   </head>
   <body>
@@ -170,12 +171,34 @@
                 mjerenja</label
               >
             </div>
-            <form id="date-form" class="filter-row date-row">
+            <form
+              id="date-form"
+              class="filter-row date-row"
+              aria-describedby="zoom-help"
+            >
               <label
-                >Od datuma <input id="date-from" type="date" required /></label
+                >Od (datum i vrijeme)
+                <input
+                  id="date-from"
+                  type="datetime-local"
+                  step="60"
+                  required /></label
               ><label
-                >Do datuma <input id="date-to" type="date" required /></label
-              ><button class="button compact" type="submit">Primijeni</button
+                >Do (datum i vrijeme)
+                <input
+                  id="date-to"
+                  type="datetime-local"
+                  step="60"
+                  required /></label
+              ><button class="button compact" type="submit">
+                Zumiraj raspon</button
+              ><button
+                id="reset-zoom"
+                class="button compact secondary"
+                type="button"
+                disabled
+              >
+                Vrati prikaz</button
               ><label class="aggregation"
                 >Prikaz
                 <select id="aggregation">
@@ -184,6 +207,11 @@
                 </select></label
               >
             </form>
+            <p id="zoom-help" class="small muted zoom-help">
+              Povuci mišem lijevo ili desno po bilo kojem grafu ili upiši raspon
+              iznad. Oba grafa prikazuju isti raspon. Vrijeme: Europe/Zagreb.
+              Esc odustaje od povlačenja.
+            </p>
             <p id="filter-error" class="error-text" role="alert" hidden></p>
           </div>
           <div class="period-info">
@@ -209,6 +237,7 @@
                 <canvas
                   id="chart-water"
                   role="img"
+                  aria-describedby="zoom-help"
                   aria-label="Graf vodostaja za odabrano razdoblje; brojčane vrijednosti su u tablici ispod."
                 ></canvas>
               </div>
@@ -229,6 +258,7 @@
                 <canvas
                   id="chart-flow"
                   role="img"
+                  aria-describedby="zoom-help"
                   aria-label="Graf protoka za odabrano razdoblje; brojčane vrijednosti su u tablici ispod."
                 ></canvas>
               </div>

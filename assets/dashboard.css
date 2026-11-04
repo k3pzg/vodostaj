@@ -1129,3 +1129,35 @@ footer a {
     justify-content: flex-start;
   }
 }
+
+.zoom-help {
+  margin-top: 12px;
+  line-height: 1.7;
+}
+.chart-wrap canvas {
+  cursor: crosshair;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.chart-wrap canvas.is-selecting {
+  cursor: col-resize;
+}
+@media (max-width: 1000px) {
+  .date-row label {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+  .date-row > button {
+    align-self: flex-end;
+  }
+}
+@media (max-width: 700px) {
+  .date-row .aggregation {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .date-row .aggregation select {
+    width: 100%;
+  }
+}

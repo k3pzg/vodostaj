@@ -6,7 +6,7 @@
     rows: [],
     selected: [],
     hours: 72,
-    custom: null,
+    zoom: null,
     page: 0,
     loading: false,
     status: null,
@@ -19,6 +19,8 @@
     { key: "protok", id: "flow", unit: "m³/s", digits: 2, color: "--flow" },
   ];
   let renderBounds;
+  let rangeDirty = false;
+  const inputTime = (stamp) => D.hourKey(stamp);
   let theme;
   try {
     theme = localStorage.getItem("ilova-theme");
@@ -116,7 +118,12 @@
       return;
     }
     const daily = $("aggregation").value === "daily";
-    const plotted = daily ? D.dailyRows(rows) : D.chartRows(rows);
+    const plotted = (daily ? D.dailyRows(rows) : D.chartRows(rows)).map(
+      (row) =>
+        daily && state.zoom
+          ? { ...row, dt: Math.min(end, Math.max(start, row.dt)) }
+          : row,
+    );
     const css = getComputedStyle(document.documentElement),
       ink = css.getPropertyValue("--muted").trim(),
       grid = css.getPropertyValue("--line").trim();
@@ -146,12 +153,13 @@
         y: r[f.key],
         count: r.counts?.[f.key],
       }));
-      const dayPadding = daily ? 12 * D.HOUR : 0;
+      const dayPadding = daily && !state.zoom ? 12 * D.HOUR : 0;
       const min = Math.min(start, points[0]?.x ?? start) - dayPadding;
       const max =
-        Math.max(end, points.at(-1)?.x ?? end, min + D.HOUR) + dayPadding;
+        Math.max(end, points.at(-1)?.x ?? end, min + 60000) + dayPadding;
       const config = {
         type: "line",
+        plugins: [ChartRangeSelection],
         data: {
           datasets: [
             {
@@ -182,6 +190,20 @@
           parsing: false,
           interaction: { mode: "nearest", axis: "x", intersect: false },
           plugins: {
+            rangeSelection: {
+              color,
+              onSelect: (from, to) => {
+                const start = Math.max(
+                  renderBounds.start,
+                  Math.round(from / 60000) * 60000,
+                );
+                const end = Math.min(
+                  renderBounds.end,
+                  Math.round(to / 60000) * 60000,
+                );
+                if (end - start >= 60000) applyZoom(start, end);
+              },
+            },
             legend: { display: false },
             tooltip: {
               displayColors: false,
@@ -359,16 +381,16 @@
     if (!state.rows.length) return;
     const now = Date.now();
     renderBounds =
-      state.custom ??
-      D.bounds(state.rows, state.hours, now, $("anchor").checked);
+      state.zoom ?? D.bounds(state.rows, state.hours, now, $("anchor").checked);
     const { start, end } = renderBounds;
     state.selected = D.filter(state.rows, start, end);
-    if (!state.custom) {
-      $("date-from").value = D.dayKey(start);
-      $("date-to").value = D.dayKey(end);
+    if (!rangeDirty) {
+      $("date-from").value = inputTime(start);
+      $("date-to").value = inputTime(end);
     }
-    const earliest = D.dayKey(state.rows[0].dt),
-      latest = D.dayKey(Math.max(now, state.rows.at(-1).dt));
+    $("reset-zoom").disabled = !state.zoom;
+    const earliest = inputTime(state.rows[0].dt),
+      latest = inputTime(Math.max(now, state.rows.at(-1).dt));
     for (const id of ["date-from", "date-to"]) {
       $(id).min = earliest;
       $(id).max = latest;
@@ -391,7 +413,7 @@
     );
     setText(
       "archive-scope",
-      `Prikaz ${state.selected.length.toLocaleString("hr-HR")} od ukupno ${state.rows.length.toLocaleString("hr-HR")} zapisa u datasetu. ${state.hours === 0 && !state.custom ? "Odabrana je cijela arhiva." : "Tablica prati odabrano razdoblje."}`,
+      `Prikaz ${state.selected.length.toLocaleString("hr-HR")} od ukupno ${state.rows.length.toLocaleString("hr-HR")} zapisa u datasetu. ${state.hours === 0 && !state.zoom ? "Odabrana je cijela arhiva." : "Tablica prati odabrano razdoblje."}`,
     );
     banner(now);
     updateLatest(now);
@@ -474,13 +496,35 @@
       .forEach((btn) =>
         btn.setAttribute(
           "aria-pressed",
-          String(!state.custom && +btn.dataset.hours === state.hours),
+          String(!state.zoom && +btn.dataset.hours === state.hours),
         ),
       );
   }
+  function clearZoom() {
+    state.zoom = null;
+    rangeDirty = false;
+    $("filter-error").hidden = true;
+  }
+  function applyZoom(start, end) {
+    state.zoom = { start, end };
+    rangeDirty = false;
+    $("filter-error").hidden = true;
+    resetPage();
+    presets();
+    render();
+  }
+  $("reset-zoom").addEventListener("click", () => {
+    clearZoom();
+    resetPage();
+    presets();
+    render();
+  });
+  $("date-form").addEventListener("input", (event) => {
+    if (event.target.type === "datetime-local") rangeDirty = true;
+  });
   function showArchive() {
     state.hours = 0;
-    state.custom = null;
+    clearZoom();
     $("anchor").checked = false;
     $("incomplete").checked = false;
     $("table-sort").value = "desc";
@@ -496,15 +540,13 @@
     const btn = event.target.closest("button[data-hours]");
     if (!btn) return;
     state.hours = +btn.dataset.hours;
-    state.custom = null;
-    $("filter-error").hidden = true;
+    clearZoom();
     resetPage();
     presets();
     render();
   });
   $("anchor").addEventListener("change", () => {
-    state.custom = null;
-    $("filter-error").hidden = true;
+    clearZoom();
     resetPage();
     presets();
     render();
@@ -512,25 +554,25 @@
   $("date-form").addEventListener("submit", (event) => {
     event.preventDefault();
     try {
-      const start = D.stationTime($("date-from").value);
-      const to = $("date-to").value,
-        next = new Date(`${to}T12:00:00Z`);
-      next.setUTCDate(next.getUTCDate() + 1);
-      const end = D.stationTime(next.toISOString().slice(0, 10)) - 1;
-      if (start > end)
-        throw new Error("Početni datum mora biti prije završnog.");
+      if (!state.rows.length) throw new Error("Najprije učitaj podatke.");
+      const parseInput = (value) => {
+        const [date, time] = value.split("T");
+        if (!time)
+          throw new Error("Upiši datum i vrijeme za oba kraja raspona.");
+        return D.stationTime(date, time);
+      };
+      const start = parseInput($("date-from").value);
+      const end = parseInput($("date-to").value);
+      if (start >= end)
+        throw new Error("Početak raspona mora biti prije završetka.");
       if (
-        state.rows.length &&
-        ($("date-from").value < D.dayKey(state.rows[0].dt) ||
-          $("date-to").value >
-            D.dayKey(Math.max(Date.now(), state.rows.at(-1).dt)))
+        start < state.rows[0].dt ||
+        end > Math.max(Date.now(), state.rows.at(-1).dt)
       )
-        throw new Error("Odaberi datume od početka arhive do danas.");
-      state.custom = { start, end };
-      $("filter-error").hidden = true;
-      resetPage();
-      presets();
-      render();
+        throw new Error(
+          "Odaberi raspon od početka arhive do trenutačnog vremena.",
+        );
+      applyZoom(start, end);
     } catch (error) {
       setText("filter-error", error.message);
       $("filter-error").hidden = false;
