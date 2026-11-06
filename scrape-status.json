@@ -1,25 +1,25 @@
 {
-  "checked_at": "2026-11-06T03:21:22.098863+01:00",
+  "checked_at": "2026-11-06T11:45:10.291742+01:00",
   "sources": {
     "vodostaj": {
       "status": "ok",
-      "count": 52,
+      "count": 60,
       "oldest": "04.11.2026 00:00",
-      "newest": "06.11.2026 03:00",
-      "age_hours": 0.36
+      "newest": "06.11.2026 11:00",
+      "age_hours": 0.75
     },
     "protok": {
       "status": "ok",
-      "count": 52,
+      "count": 60,
       "oldest": "04.11.2026 00:00",
-      "newest": "06.11.2026 03:00",
-      "age_hours": 0.36
+      "newest": "06.11.2026 11:00",
+      "age_hours": 0.75
     }
   },
   "source_errors": {},
   "unpaired_source_hours": [],
-  "new_rows": 4,
-  "changed_rows": 4,
+  "new_rows": 8,
+  "changed_rows": 8,
   "timezone": "Europe/Zagreb",
   "lookback_hours": 168,
   "max_age_hours": 3,
@@ -128,16 +128,16 @@
     ]
   },
   "freshness_errors": {},
-  "total_rows": 5482,
+  "total_rows": 5490,
   "status": "degraded",
   "latest": {
     "VODOSTAJ": {
-      "time": "06.11.2026 03:00",
-      "age_hours": 0.36
+      "time": "06.11.2026 11:00",
+      "age_hours": 0.75
     },
     "PROTOK": {
-      "time": "06.11.2026 03:00",
-      "age_hours": 0.36
+      "time": "06.11.2026 11:00",
+      "age_hours": 0.75
     }
   }
 }
