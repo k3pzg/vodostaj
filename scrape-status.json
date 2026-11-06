@@ -1,25 +1,22 @@
 {
-  "checked_at": "2026-11-06T11:45:10.291742+01:00",
+  "checked_at": "2026-11-06T18:58:32.228736+01:00",
   "sources": {
     "vodostaj": {
-      "status": "ok",
-      "count": 60,
-      "oldest": "04.11.2026 00:00",
-      "newest": "06.11.2026 11:00",
-      "age_hours": 0.75
+      "status": "error",
+      "error": "Dohvat nije uspio: https://mvodostaji.voda.hr/Home/PregledVodostajaPostaje?sektorID=4&bpID=6&postajaID=43: 500 Server Error: Internal Server Error for url: https://mvodostaji.voda.hr/Home/PregledVodostajaPostaje?sektorID=4&bpID=6&postajaID=43"
     },
     "protok": {
-      "status": "ok",
-      "count": 60,
-      "oldest": "04.11.2026 00:00",
-      "newest": "06.11.2026 11:00",
-      "age_hours": 0.75
+      "status": "error",
+      "error": "Dohvat nije uspio: https://mvodostaji.voda.hr/Home/PregledProtokaPostaje?sektorID=4&bpID=6&postajaID=43: 500 Server Error: Internal Server Error for url: https://mvodostaji.voda.hr/Home/PregledProtokaPostaje?sektorID=4&bpID=6&postajaID=43"
     }
   },
-  "source_errors": {},
+  "source_errors": {
+    "vodostaj": "Dohvat nije uspio: https://mvodostaji.voda.hr/Home/PregledVodostajaPostaje?sektorID=4&bpID=6&postajaID=43: 500 Server Error: Internal Server Error for url: https://mvodostaji.voda.hr/Home/PregledVodostajaPostaje?sektorID=4&bpID=6&postajaID=43",
+    "protok": "Dohvat nije uspio: https://mvodostaji.voda.hr/Home/PregledProtokaPostaje?sektorID=4&bpID=6&postajaID=43: 500 Server Error: Internal Server Error for url: https://mvodostaji.voda.hr/Home/PregledProtokaPostaje?sektorID=4&bpID=6&postajaID=43"
+  },
   "unpaired_source_hours": [],
-  "new_rows": 8,
-  "changed_rows": 8,
+  "new_rows": 0,
+  "changed_rows": 0,
   "timezone": "Europe/Zagreb",
   "lookback_hours": 168,
   "max_age_hours": 3,
@@ -73,7 +70,11 @@
       "03.11.2026 11:00",
       "03.11.2026 12:00",
       "03.11.2026 13:00",
-      "03.11.2026 14:00"
+      "03.11.2026 14:00",
+      "06.11.2026 12:00",
+      "06.11.2026 13:00",
+      "06.11.2026 14:00",
+      "06.11.2026 15:00"
     ],
     "PROTOK": [
       "31.10.2026 04:00",
@@ -124,20 +125,27 @@
       "03.11.2026 11:00",
       "03.11.2026 12:00",
       "03.11.2026 13:00",
-      "03.11.2026 14:00"
+      "03.11.2026 14:00",
+      "06.11.2026 12:00",
+      "06.11.2026 13:00",
+      "06.11.2026 14:00",
+      "06.11.2026 15:00"
     ]
   },
-  "freshness_errors": {},
+  "freshness_errors": {
+    "VODOSTAJ": "Nesvježi ili budući podaci: ('06.11.2026', '11:00'), starost 7.98 h",
+    "PROTOK": "Nesvježi ili budući podaci: ('06.11.2026', '11:00'), starost 7.98 h"
+  },
   "total_rows": 5490,
-  "status": "degraded",
+  "status": "error",
   "latest": {
     "VODOSTAJ": {
       "time": "06.11.2026 11:00",
-      "age_hours": 0.75
+      "age_hours": 7.98
     },
     "PROTOK": {
       "time": "06.11.2026 11:00",
-      "age_hours": 0.75
+      "age_hours": 7.98
     }
   }
 }
