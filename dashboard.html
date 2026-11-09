@@ -108,6 +108,7 @@
             <div class="metric-bottom">
               <span id="flow-time">Čekamo podatke</span
               ><span id="flow-change">— prema prethodnom danu</span>
+              <span id="flow-origin">Objavljeni protok Hrvatskih voda</span>
             </div>
             <svg
               class="river-art"
@@ -124,7 +125,7 @@
             <div class="eyebrow">CIJELA ARHIVA</div>
             <h2 id="dataset-title">Prikupljeni dataset</h2>
             <p id="dataset-summary" class="small muted">
-              Cijeli CSV prikupljenih mjerenja dostupan je za preuzimanje.
+              Cijeli CSV objavljenih mjerenja dostupan je za preuzimanje, bez procijenjenih protoka.
             </p>
           </div>
           <div class="dataset-actions">
@@ -385,6 +386,19 @@
             </div>
           </section>
         </section>
+        <section class="panel rating-panel" aria-labelledby="rating-title">
+          <h2 id="rating-title">Krivulja vodostaj → protok</h2>
+          <p id="estimate-note" class="small muted">Učitavam podatke o procjenama…</p>
+          <p id="rating-summary" class="small">Učitavam povijesnu krivulju…</p>
+          <div id="rating-chart-wrap" style="height: 280px; position: relative" hidden>
+            <canvas id="chart-rating" role="img" aria-label="Povijesna krivulja protoka Q u ovisnosti o vodostaju H; raspon i način izračuna opisani su iznad grafa."></canvas>
+          </div>
+          <p id="rating-validation" class="small muted"></p>
+          <p class="small muted">Ako primarni izvor zakaže ili zastari, vodostaj se dohvaća s
+            <a href="https://mvodostaji.voda.hr/Home/PregledVodostajaPostaje?sektorID=4&amp;bpID=0&amp;postajaID=1491" target="_blank" rel="noopener">rezervnog izvora iste postaje (1491)</a>.
+            Protok nedostupnih sati procjenjuje se samo iz dostupnog vodostaja.
+            Objavljeni protok uvijek ima prednost. Izvoz odabranog razdoblja sadrži stupac PROTOK_IZVOR.</p>
+        </section>
         <section class="about">
           <h3>O mjerenjima</h3>
           <p>
@@ -395,7 +409,7 @@
           </p>
           <p>
             Sva vremena prikazana su za <strong>Europe/Zagreb</strong>. Prazno
-            polje nije nula. Dnevni prosjek koristi samo dostupna mjerenja; nije
+            polje nije nula. Procijenjeni protoci posebno su označeni. Dnevni prosjek koristi dostupne podatke; nije
             zamjena za potpun dnevni niz. Promjena prema prethodnom danu
             uspoređuje isti lokalni sat, samo ako oba mjerenja postoje.
           </p>

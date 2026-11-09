@@ -12,6 +12,8 @@
     status: null,
     fetched: null,
     error: null,
+    estimates: null,
+    estimateError: false,
   };
   const charts = {};
   const fields = [
@@ -68,6 +70,10 @@
         : "Mjerenja nisu svježa";
       description =
         "Prikazana su posljednja poznata mjerenja. Nova mjerenja kasne ili još nisu prikupljena; spremljena arhiva ostaje dostupna.";
+    } else if (D.latest(state.rows, 'protok')?.estimatedProtok) {
+      type = "warning";
+      title = "Protok je procijenjen iz vodostaja";
+      description = "Prikazana je procjena prema povijesnoj krivulji Q(H). Objavljeni protok trenutačno nije dostupan za zadnji sat.";
     } else if (
       state.status?.status === "error" ||
       Object.keys(state.status?.source_errors ?? {}).length
@@ -94,6 +100,9 @@
       const row = D.latest(state.rows, f.key),
         age = row ? (now - row.dt) / D.HOUR : Infinity;
       setText(`${f.id}-value`, D.formatNumber(row?.[f.key], f.digits));
+      if (f.key === "protok") {
+        setText("flow-origin", row?.estimatedProtok ? "Procjena Q(H) · nije objavljeni protok" : "Objavljeni protok Hrvatskih voda");
+      }
       setText(
         `${f.id}-time`,
         row ? D.formatTime(row.dt) : "Nema dostupnog mjerenja",
@@ -152,6 +161,8 @@
         x: r.dt,
         y: r[f.key],
         count: r.counts?.[f.key],
+        estimated: f.key === "protok" && r.estimatedProtok,
+        estimatedCount: r.estimatedCount,
       }));
       const dayPadding = daily && !state.zoom ? 12 * D.HOUR : 0;
       const min = Math.min(start, points[0]?.x ?? start) - dayPadding;
@@ -171,6 +182,10 @@
               fill: true,
               tension: 0,
               spanGaps: false,
+              segment: {
+                borderDash: (ctx) => ctx.p0.raw.estimated || ctx.p1.raw.estimated ? [6, 4] : undefined,
+              },
+              pointStyle: (ctx) => ctx.raw?.estimated ? "triangle" : "circle",
               pointRadius: (ctx) => {
                 const i = ctx.dataIndex;
                 const isolated =
@@ -218,7 +233,7 @@
                       : D.formatTime(items[0].parsed.x)
                     : "",
                 label: (ctx) =>
-                  `${daily ? "Prosjek: " : ""}${D.formatNumber(ctx.parsed.y, f.digits)} ${f.unit}${daily ? ` (${ctx.raw.count} mjerenja)` : ""}`,
+                  `${daily ? "Prosjek: " : ""}${D.formatNumber(ctx.parsed.y, f.digits)} ${f.unit}${daily ? ` (${ctx.raw.count} uzoraka${ctx.raw.estimated ? `; ${ctx.raw.estimatedCount} procjena` : ""})` : ctx.raw.estimated ? " · PROCJENA Q(H)" : ""}`,
               },
             },
           },
@@ -262,7 +277,7 @@
       "chart-note",
       daily
         ? "Dnevni prosjeci dostupnih sati. U opisu točke vidi se broj mjerenja; nepotpuni dani mogu imati manje uzoraka."
-        : "Prekid linije označava nedostajuća mjerenja. Vrijednosti se ne procjenjuju.",
+        : "Prekid linije označava nedostajuće podatke. Isprekidani protok i trokuti označavaju procjenu Q(H); puna linija označava objavljene podatke.",
     );
   }
   function updateQuality(rows, start, end, now) {
@@ -275,7 +290,7 @@
     $("coverage-bar").style.width = `${c.percent ?? 0}%`;
     setText(
       "coverage-description",
-      `Popunjenost oba niza · ${c.total.toLocaleString("hr-HR")} očekivanih satnih oznaka · posljednja 3 sata izuzeta zbog kašnjenja objave`,
+      `Popunjenost objavljenih mjerenja (procjene se ne računaju) · ${c.total.toLocaleString("hr-HR")} očekivanih satnih oznaka · posljednja 3 sata izuzeta zbog kašnjenja objave`,
     );
     const list = $("gap-list");
     list.replaceChildren();
@@ -319,7 +334,7 @@
       const failed = Object.keys(status.source_errors ?? {});
       setText(
         "collection-status",
-        `${labels[status.status] ?? "Nepoznat status"} · ${D.formatTime(Date.parse(status.checked_at))}${failed.length ? ` · ${failed.join(", ")}` : ""}`,
+        `${labels[status.status] ?? "Nepoznat status"} · ${D.formatTime(Date.parse(status.checked_at))}${status.fallback?.status && status.fallback.status !== "error" ? " · rezervni izvor vodostaja (1491)" : ""}${failed.length ? ` · primarni izvor: ${failed.join(", ")}` : ""}`,
       );
     } else
       setText(
@@ -327,10 +342,59 @@
         "Status pokušaja nije dostupan. Starost mjerenja provjerena je iz arhive.",
       );
   }
+  function updateRatingCurve() {
+    const model = state.estimates?.model;
+    const count = state.selected.filter((r) => r.estimatedProtok).length;
+    setText("estimate-note", state.estimateError
+      ? "Procjene protoka nisu se mogle učitati. Prikazani su samo objavljeni podaci."
+      : `${count.toLocaleString("hr-HR")} procjena protoka u odabranom razdoblju. Procjene se ne računaju kao objavljena mjerenja u provjeri popunjenosti. Dnevni prosjeci i statistike uključuju prikazane procjene.`);
+    $("rating-chart-wrap").hidden = !model;
+    if (!model) {
+      setText("rating-summary", "Za krivulju je potrebno najmanje 20 povijesnih parova na 5 različitih vodostaja.");
+      if (charts.rating) { charts.rating.destroy(); delete charts.rating; }
+      return;
+    }
+    const validation = model.validation;
+    setText("rating-summary", `${model.sample_count.toLocaleString("hr-HR")} objavljenih parova · ${model.knots.length} vodostaja · raspon ${D.formatNumber(model.min_h_cm, 0)}–${D.formatNumber(model.max_h_cm, 0)} cm. Medijani po vodostaju, monotona krivulja i linearna interpolacija; bez stalnog koeficijenta i bez ekstrapolacije. Praznine veće od ${model.max_gap_cm} cm ne preračunavaju se.`);
+    const temporal = validation?.chronological_last_20_percent;
+    const levels = validation?.held_out_levels;
+    setText("rating-validation", temporal && levels
+      ? `Provjera na zadnjih 20 % povijesnih parova: MAE ${D.formatNumber(temporal.mae_m3s, 4)} m³/s (${temporal.predicted}/${temporal.tested} pokrivenih). Provjera na izostavljenim vodostajima: MAE ${D.formatNumber(levels.mae_m3s, 4)} m³/s (${levels.predicted}/${levels.tested}). To opisuje slaganje s arhivom, a ne jamči točnost budućeg protoka. Krivulja nije službena protočna krivulja operatora.`
+      : "Povijesna provjera nije dostupna.");
+    if (typeof Chart === "undefined") return;
+    const css = getComputedStyle(document.documentElement);
+    const color = css.getPropertyValue("--flow").trim();
+    const ink = css.getPropertyValue("--muted").trim();
+    const line = [];
+    for (const knot of model.knots) {
+      if (line.length && knot.h_cm - line.at(-1).x > model.max_gap_cm)
+        line.push({x: (line.at(-1).x + knot.h_cm) / 2, y: null});
+      line.push({x: knot.h_cm, y: knot.q_m3s});
+    }
+    const last = D.latest(state.rows, 'protok');
+    const data = {datasets: [
+      {label: "Povijesna krivulja Q(H)", data: line, borderColor: color,
+       backgroundColor: color, pointRadius: 1, borderWidth: 2, spanGaps: false},
+      {label: "Posljednja procjena", data: last?.estimatedProtok ? [{x: last.vodostaj, y: last.protok}] : [],
+       pointRadius: 6, pointStyle: "triangle", backgroundColor: ink, showLine: false},
+    ]};
+    const options = {animation: false, responsive: true, maintainAspectRatio: false, parsing: false,
+      plugins: {legend: {labels: {color: ink}}, tooltip: {callbacks: {
+        title: (items) => items.length ? `Vodostaj: ${D.formatNumber(items[0].parsed.x, 1)} cm` : "",
+        label: (ctx) => `Q(H): ${D.formatNumber(ctx.parsed.y, 2)} m³/s`,
+      }}},
+      scales: {x: {type: "linear", title: {display: true, text: "Vodostaj H (cm)", color: ink}, ticks: {color: ink}},
+               y: {title: {display: true, text: "Protok Q (m³/s)", color: ink}, ticks: {color: ink}}}};
+    if (charts.rating) {
+      charts.rating.data = data;
+      charts.rating.options = options;
+      charts.rating.update('none');
+    } else charts.rating = new Chart($("chart-rating"), {type: "line", data, options});
+  }
   function tableRows() {
     let rows = state.selected;
     if ($("incomplete").checked)
-      rows = rows.filter((r) => r.vodostaj === null || r.protok === null);
+      rows = rows.filter((r) => r.vodostaj === null || r.protok === null || r.estimatedProtok);
     return $("table-sort").value === "desc" ? [...rows].reverse() : rows;
   }
   function updateTable() {
@@ -348,7 +412,7 @@
         r.vrijeme,
         D.formatNumber(r.vodostaj, 1),
         D.formatNumber(r.protok, 2),
-        r.vodostaj === null || r.protok === null ? "Nepotpun" : "Oba mjerenja",
+        r.estimatedProtok ? "Protok: procjena Q(H)" : r.vodostaj === null || r.protok === null ? "Nepotpun" : "Oba mjerenja",
       ]) {
         const td = document.createElement("td");
         td.textContent = value;
@@ -420,6 +484,7 @@
     updateCharts(state.selected, start, end);
     updateQuality(state.selected, start, end, now);
     updateTable();
+    updateRatingCurve();
   }
   async function resource(path, json = false) {
     const response = await fetch(`${path}?t=${Date.now()}`, {
@@ -436,9 +501,10 @@
     $("refresh").disabled = true;
     $("refresh").setAttribute("aria-busy", "true");
     setText("checked-at", "Provjeravam podatke…");
-    const [csv, status] = await Promise.allSettled([
+    const [csv, status, estimates] = await Promise.allSettled([
       resource("vodostaj_protok.csv"),
       resource("scrape-status.json", true),
+      resource("flow-estimates.json", true),
     ]);
     state.status =
       status.status === "fulfilled" &&
@@ -450,7 +516,16 @@
       if (csv.status === "rejected") throw csv.reason;
       const rows = D.parseCSV(csv.value);
       if (!rows.length) throw new Error("Arhiva ne sadrži mjerenja.");
+      state.estimateError = false;
+      state.estimates = null;
       state.rows = rows;
+      try {
+        if (estimates.status === "rejected") throw estimates.reason;
+        state.rows = D.withEstimates(rows, estimates.value);
+        state.estimates = estimates.value;
+      } catch {
+        state.estimateError = true;
+      }
       state.error = null;
       state.fetched = Date.now();
       render();
@@ -607,7 +682,7 @@
   });
   $("export").addEventListener("click", () => {
     const url = URL.createObjectURL(
-      new Blob([D.toCSV([...state.selected].reverse())], {
+      new Blob([D.toCSV([...state.selected].reverse(), true)], {
         type: "text/csv;charset=utf-8",
       }),
     );

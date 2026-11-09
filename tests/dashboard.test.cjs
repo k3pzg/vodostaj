@@ -139,3 +139,30 @@ test("whole archive includes all stored rows within source clock tolerance", () 
   const range = D.bounds(rows, 0, rows.at(-1).dt - D.HOUR / 2);
   assert.deepEqual(D.filter(rows, range.start, range.end), rows);
 });
+
+test("estimates fill only matching missing flow, keep published priority and preserve coverage", () => {
+  const rows = D.parseCSV(head + row("02.11.2026", "14:00", "28", "0,79") + row("02.11.2026", "15:00", "29", ""));
+  const payload = {schema_version: 1, station: "Ilova - Maslenjača", estimates: [
+    {date: "02.11.2026", time: "14:00", water_cm: 28, flow_m3s: 100},
+    {date: "02.11.2026", time: "15:00", water_cm: 29, flow_m3s: .85},
+  ]};
+  const merged = D.withEstimates(rows, payload);
+  assert.equal(merged[0].protok, .79);
+  assert.equal(merged[1].protok, .85);
+  assert.equal(merged[1].estimatedProtok, true);
+  assert.equal(rows[1].protok, null);
+  assert.deepEqual(D.coverage(merged, rows[0].dt, rows[1].dt), D.coverage(rows, rows[0].dt, rows[1].dt));
+  const daily = D.dailyRows(merged)[0];
+  assert.equal(daily.estimatedCount, 1);
+  assert.equal(daily.estimatedProtok, true);
+  const csv = D.toCSV(merged, true);
+  assert.match(csv, /PROTOK_IZVOR/);
+  assert.match(csv, /0,85;procjena_krivuljom/);
+  assert.match(csv, /0,79;objavljeni_podatak/);
+  payload.estimates[1].water_cm = 30;
+  assert.equal(D.withEstimates(rows, payload)[1].protok, null);
+  payload.estimates[1].water_cm = 29;
+  payload.estimates[1].flow_m3s = -1;
+  assert.equal(D.withEstimates(rows, payload)[1].protok, null);
+  assert.throws(() => D.withEstimates(rows, {schema_version: 99}));
+});

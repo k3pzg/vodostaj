@@ -1,7 +1,8 @@
 import argparse
 from pathlib import Path
 
-from scraper import load_existing, merge_rows, save_csv
+from scraper import load_existing, merge_rows, save_csv, write_json_atomic
+from rating_curve import build_estimates
 
 
 def merge_csv(base_path: str, incoming_path: str) -> int:
@@ -27,12 +28,15 @@ def main() -> None:
     )
     parser.add_argument("base", help="Glavni CSV u koji se podaci spajaju")
     parser.add_argument("incoming", help="CSV čiji se podaci dodaju")
+    parser.add_argument('--estimates-file', help='Ponovno izračunaj odvojene procjene nakon spajanja')
     args = parser.parse_args()
 
     if Path(args.base).resolve() == Path(args.incoming).resolve():
         parser.error("Glavni i ulazni CSV moraju biti različite datoteke")
 
     row_count = merge_csv(args.base, args.incoming)
+    if args.estimates_file:
+        write_json_atomic(build_estimates(load_existing(args.base)), args.estimates_file)
     print(f"CSV datoteke spojene. Ukupno redaka: {row_count}")
 
 

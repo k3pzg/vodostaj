@@ -2,7 +2,9 @@
 
 Pregled satnih mjerenja postaje **Ilova – Maslenjača (43)** u području Končanice.
 Podaci se prikupljaju s javnih stranica Hrvatskih voda i čuvaju u
-`vodostaj_protok.csv`. Nema interpolacije ni izmišljanja nedostajućih mjerenja.
+`vodostaj_protok.csv`. Ta arhiva sadrži samo objavljene vrijednosti; nema
+vremenskog popunjavanja nedostajućih sati. Nedostupan protok može se zasebno
+procijeniti iz dostupnog vodostaja prema povijesnoj krivulji Q(H), uz jasnu oznaku.
 
 **[Otvori dashboard](https://k3pzg.github.io/vodostaj/dashboard.html)** ·
 [Izvorni vodostaj](https://mvodostaji.voda.hr/Home/PregledVodostajaPostaje?sektorID=4&bpID=6&postajaID=43) ·
@@ -29,6 +31,14 @@ uklanja vremenske i tablične filtre; ista prečica dostupna je uz tablicu.
   **Do zadnjeg mjerenja** za povijesni pregled tijekom kašnjenja izvora.
 - Satni grafovi i dnevni prosjeci. Opis dnevne točke navodi broj dostupnih uzoraka.
   Prekidi ostaju vidljivi; dnevni prosjek nepotpunog dana nije potpun dnevni podatak.
+- Procijenjeni protok označen je isprekidanom linijom i trokutima, u kartici
+  zadnjeg podatka i u tablici. Statistike i dnevni prosjeci uključuju prikazane
+  procjene; opis dnevne točke navodi njihov broj. Provjera popunjenosti računa
+  samo objavljene vrijednosti, pa procjene ne skrivaju kvar izvora.
+- Panel **Krivulja vodostaj → protok** prikazuje povijesnu krivulju, njezin
+  raspon, broj parova i rezultate provjere. Izvoz odabranog razdoblja ima
+  stupac `PROTOK_IZVOR` (`objavljeni_podatak`, `procjena_krivuljom`, `nedostaje`).
+  Cijeli izvorni CSV ostaje dostupan bez procijenjenih protoka.
 - Minimum, maksimum i prosjek odabranog razdoblja za oba mjerenja.
 - Popunjenost oba niza i popis nedostajućih sati. Posljednja 3 sata izuzeta su
   iz provjere praznina zbog mogućeg kašnjenja objave. Jesenski ponovljeni sat
@@ -55,7 +65,12 @@ Za zajamčeno neovisno pokretanje treba vanjski raspoređivač; podržan je
 
 Scraper provjerava strukturu izvora, datume, pune sate, numeričke vrijednosti,
 duplikate i buduće oznake. Jedan sat u budućnosti dopušten je kao tolerancija.
-Dva se izvora obrađuju **neovisno**:
+Dva se izvora obrađuju **neovisno**. Kad primarni vodostaj zakaže, bude neispravan
+ili kasni preko 3 sata, pokušava se [rezervni izvor iste postaje (1491)](https://mvodostaji.voda.hr/Home/PregledVodostajaPostaje?sektorID=4&bpID=0&postajaID=1491).
+Provjerava se ime postaje **Ilova - Maslenjača**, struktura i vremenske oznake.
+Rezervni vodostaj popunjava nedostajuće sate/polja; ne prepisuje primarne ni
+ranije spremljene vodostaje na preklapanju. Aktivacija rezerve ostaje vidljiva
+kao degradirano stanje. Tablica opisuje ponašanje nakon pokušaja rezerve:
 
 | Stanje | Ponašanje |
 | --- | --- |
@@ -70,11 +85,43 @@ uvoza ne briše poznatu vrijednost drugog mjerenja. Workflow pri istodobnim
 izmjenama prvo pokušava rebase, a kod sukoba spaja prikupljene vrijednosti u
 aktualnu granu umjesto odbacivanja tuđih promjena koda.
 
-`scrape-status.json` objavljuje vrijeme **pokušaja**, stanja pojedinih izvora i
+`scrape-status.json` objavljuje vrijeme **pokušaja**, stanja pojedinih izvora,
+aktivaciju rezerve, broj procjena i
 kvalitetu arhive za dashboard. Generira ga workflow i sprema uz CSV, čak i kad
 oba izvora zakažu (ako spremanje/slanje uspije). Nedostupan status ne blokira
 prikaz arhive. Sažetak Actions posla prikazuje kratke nalaze; izvještaji i
 izvorni HTML dostupni su 30 dana u artefaktu `scrape-diagnostics-*`.
+
+### Preračun protoka Q(H)
+
+`rating_curve.py` uči samo iz povijesnih parova objavljenog vodostaja (cm) i
+protoka (m³/s). Za svaki vodostaj računa medijan protoka, zatim osigurava
+monotoni rast ponderiranom izotonom regresijom. Između susjednih poznatih
+vodostaja koristi linearnu interpolaciju. Time koeficijent ovisi o vodostaju;
+ne koristi se jedan omjer Q/H ni polinom koji može oscilirati.
+
+Potrebno je najmanje 20 parova na najmanje 5 različitih vodostaja. Procjene
+se ne rade izvan povijesnog raspona ni između točaka udaljenih više od 20 cm.
+Bez dostupnog vodostaja ne nastaje procjena. Objavljeni protok ima prednost
+za isti sat, čak i dok je datoteka procjena još iz starijeg pokušaja.
+
+Procjene i model spremaju se u **`flow-estimates.json`**, odvojeno od arhive.
+Novi izračun obuhvaća samo sate kojima nedostaje objavljeni protok. Procijenjene
+vrijednosti nikada se ne vraćaju u trening. Dashboard koristi procjenu samo kad
+se datum, sat i vodostaj podudaraju s arhivom. `--check` ne mijenja model ni CSV.
+
+Model sadrži čvorove, broj uzoraka, raspon, ID i dvije provjere: treniranje na
+prvih 80 % parova s provjerom na zadnjih 20 %, te provjeru na svakom petom
+izostavljenom vodostaju (bez krajnjih točaka). Izvještavaju se MAE, RMSE,
+najveće odstupanje i broj pokrivenih/provjerenih uzoraka. Nepokriveni primjeri
+nisu uključeni u pogrešku. Slaganje s arhivom nije jamstvo stvarne buduće
+točnosti niti službena protočna krivulja Hrvatskih voda; promjena korita ili
+uspora može promijeniti odnos Q(H).
+
+Pri prvom izračunu 9.11.2026. model ima 5.490 parova na 213 vodostaja, raspon
+11–472 cm. Provjera na izostavljenim vodostajima daje MAE 0,002562 m³/s za
+922 od 923 primjera. Vremenska provjera pokriva 816 od 1.098 primjera uz MAE 0;
+to odražava ponavljanje istih tabličnih odnosa u objavljenoj arhivi.
 
 ### Izlazni kodovi
 

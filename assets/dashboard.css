@@ -357,6 +357,14 @@ strong {
   color: var(--muted);
   flex-wrap: wrap;
 }
+#flow-origin {
+  flex-basis: 100%;
+  font-weight: 600;
+}
+.rating-panel {
+  padding: 24px;
+  margin-top: 24px;
+}
 .river-art {
   position: absolute;
   bottom: 0;

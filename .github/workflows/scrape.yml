@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'scraper.py'
+      - 'rating_curve.py'
       - 'merge_csv.py'
       - 'requirements.txt'
       - '.github/workflows/scrape.yml'
@@ -90,6 +91,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add vodostaj_protok.csv
+          if [ -f flow-estimates.json ]; then git add flow-estimates.json; fi
           if [ -f scrape-status.json ]; then git add scrape-status.json; fi
 
           if git diff --cached --quiet; then
@@ -113,11 +115,11 @@ jobs:
               git rebase --abort
               # Only our generated files are replaced; preserve concurrent code changes.
               git reset --hard "origin/$TARGET_BRANCH"
-              python merge_csv.py vodostaj_protok.csv "$RUNNER_TEMP/collected.csv"
+              python merge_csv.py vodostaj_protok.csv "$RUNNER_TEMP/collected.csv" --estimates-file flow-estimates.json
               if [ -f "$RUNNER_TEMP/collected-status.json" ]; then
                 cp "$RUNNER_TEMP/collected-status.json" scrape-status.json
               fi
-              git add vodostaj_protok.csv scrape-status.json
+              git add vodostaj_protok.csv scrape-status.json flow-estimates.json
               if ! git diff --cached --quiet; then
                 git commit -m "Update measurements and collection status"
               fi
@@ -173,6 +175,7 @@ jobs:
             collection-report.json
             quality-report.json
             scrape-status.json
+            flow-estimates.json
             source-snapshots/
           if-no-files-found: ignore
           retention-days: 30

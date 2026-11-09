@@ -107,7 +107,9 @@ class CommandTests(unittest.TestCase):
         s.save_csv(self.csv, s.merge_rows({}, dict.fromkeys([key(5), key(6), key(7), key(8)], '11,0'), dict.fromkeys([key(5), key(6), key(7), key(8)], '0,08')))
 
     def run_main(self, sources=None, extra=None):
-        with patch('scraper.local_now', return_value=NOW), patch('scraper.fetch_html', side_effect=sources):
+        # A failed/stale primary now attempts the backup after both primaries.
+        responses = list(sources) + [RuntimeError('backup offline')] if sources is not None else None
+        with patch('scraper.local_now', return_value=NOW), patch('scraper.fetch_html', side_effect=responses):
             return s.main(self.args + (extra or []))
 
     def test_fresh_unchanged_csv_success(self):
@@ -151,7 +153,7 @@ class CommandTests(unittest.TestCase):
         keys = [key(h) for h in range(5, 9)]
         later = NOW + timedelta(hours=12)
         with patch('scraper.local_now', return_value=later), patch('scraper.fetch_html',
-                    side_effect=[html(keys), html(keys, '0,08')]), patch('scraper.save_csv') as save:
+                    side_effect=[html(keys), html(keys, '0,08'), RuntimeError('backup offline')]), patch('scraper.save_csv') as save:
             self.assertEqual(s.main(self.args), 2)
             save.assert_not_called()
 

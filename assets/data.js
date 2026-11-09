@@ -101,6 +101,22 @@
           : now;
     return { start: hours ? end - hours * HOUR : (rows[0]?.dt ?? end), end };
   }
+  function withEstimates(rows, payload) {
+    if (payload?.schema_version !== 1 || payload.station !== "Ilova - Maslenjača" || !Array.isArray(payload.estimates))
+      throw new Error("Neispravne procjene protoka");
+    const estimates = new Map();
+    for (const item of payload.estimates) {
+      if (typeof item.date !== "string" || typeof item.time !== "string" ||
+          !Number.isFinite(item.water_cm) || !Number.isFinite(item.flow_m3s) || item.flow_m3s < 0) continue;
+      estimates.set(`${item.date} ${item.time}`, item);
+    }
+    return rows.map((r) => {
+      const item = estimates.get(`${r.datum} ${r.vrijeme}`);
+      return r.protok === null && item && r.vodostaj === item.water_cm
+        ? { ...r, protok: item.flow_m3s, estimatedProtok: true }
+        : r;
+    });
+  }
   function filter(rows, start, end) {
     return rows.filter((r) => r.dt >= start && r.dt <= end);
   }
@@ -144,7 +160,8 @@
     const missing = { vodostaj: [], protok: [] };
     for (const [key, t] of expected)
       for (const field of Object.keys(missing)) {
-        if (!Number.isFinite(available.get(key)?.[field]))
+        if (!Number.isFinite(available.get(key)?.[field]) ||
+            (field === "protok" && available.get(key)?.estimatedProtok))
           missing[field].push(t);
       }
     const total = expected.size;
@@ -198,6 +215,8 @@
         dt,
         vodostaj: summary(group, "vodostaj").mean,
         protok: summary(group, "protok").mean,
+        estimatedProtok: group.some((r) => r.estimatedProtok),
+        estimatedCount: group.filter((r) => r.estimatedProtok).length,
         counts: {
           vodostaj: summary(group, "vodostaj").count,
           protok: summary(group, "protok").count,
@@ -207,9 +226,10 @@
     }
     return result;
   }
-  function toCSV(rows) {
+  function toCSV(rows, includeOrigin = false) {
+    includeOrigin = includeOrigin || rows.some((r) => r.estimatedProtok);
     return (
-      "\uFEFFDATUM;VRIJEME;VODOSTAJ;PROTOK\r\n" +
+      `\uFEFFDATUM;VRIJEME;VODOSTAJ;PROTOK${includeOrigin ? ";PROTOK_IZVOR" : ""}\r\n` +
       rows
         .map((r) =>
           [
@@ -219,7 +239,7 @@
               ? String(r.vodostaj).replace(".", ",")
               : "",
             Number.isFinite(r.protok) ? String(r.protok).replace(".", ",") : "",
-          ].join(";"),
+          ].concat(includeOrigin ? [r.estimatedProtok ? "procjena_krivuljom" : Number.isFinite(r.protok) ? "objavljeni_podatak" : "nedostaje"] : []).join(";"),
         )
         .join("\r\n") +
       "\r\n"
@@ -233,6 +253,7 @@
     hourKey,
     stationTime,
     parseCSV,
+    withEstimates,
     bounds,
     filter,
     latest,

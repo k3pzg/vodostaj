@@ -112,6 +112,9 @@ def main():
                 page.clock.install(time=datetime(2026, 11, 3, 12, tzinfo=timezone.utc))
                 page.on('pageerror', lambda error: errors.append(str(error)))
                 ctx.route('**/vodostaj_protok.csv*', lambda route: route.fulfill(status=200, body=CSV))
+                ctx.route('**/flow-estimates.json*', lambda route: route.fulfill(status=200, json={
+                    'schema_version': 1, 'station': 'Ilova - Maslenjača', 'model': None, 'estimates': [],
+                }))
                 page.route('**/scrape-status.json?*', lambda route: route.fulfill(status=200, json={
                     'checked_at': '2026-11-03T12:00:00+01:00', 'status': 'degraded',
                     'source_errors': {'protok': 'offline'},
@@ -180,6 +183,9 @@ def main():
             # First-load failure must permit retry and must never show green status.
             ctx = browser.new_context()
             page = ctx.new_page()
+            page.route('**/flow-estimates.json*', lambda route: route.fulfill(status=200, json={
+                'schema_version': 1, 'station': 'Ilova - Maslenjača', 'model': None, 'estimates': [],
+            }))
             page.route('**/vodostaj_protok.csv*', lambda route: route.fulfill(status=503, body='offline'))
             page.route('**/scrape-status.json?*', lambda route: route.fulfill(status=404, body='missing'))
             page.goto(url)
@@ -202,6 +208,42 @@ def main():
             }""")
             assert not errors, errors
             print('PASS: initial failure and recovery; no JavaScript errors')
+            ctx.close()
+            # A separate Q(H) estimate must be visible and labelled everywhere;
+            # primary recovery overrides it even if the sidecar is still cached.
+            payload = {'schema_version': 1, 'station': 'Ilova - Maslenjača',
+                       'model': {'sample_count': 25, 'min_h_cm': 10, 'max_h_cm': 50, 'max_gap_cm': 20,
+                                 'knots': [{'h_cm': h, 'q_m3s': q} for h, q in [(10, .05), (20, .36), (30, .91), (40, 1.56), (50, 2.31)]],
+                                 'validation': {}},
+                       'estimates': [{'date': '02.11.2026', 'time': '15:00', 'water_cm': 29, 'flow_m3s': .85}]}
+            for width in (1440, 320):
+                ctx = browser.new_context(viewport={'width': width, 'height': 1000}, accept_downloads=True)
+                page = ctx.new_page()
+                page.on('pageerror', lambda error: errors.append(str(error)))
+                page.clock.install(time=datetime(2026, 11, 2, 15, 30, tzinfo=timezone.utc))
+                page.route('**/vodostaj_protok.csv*', lambda route: route.fulfill(status=200, body=CSV))
+                page.route('**/flow-estimates.json*', lambda route: route.fulfill(status=200, json=payload))
+                page.goto(url)
+                page.wait_for_function("document.getElementById('flow-value').textContent === '0,85'")
+                assert 'Procjena Q(H)' in page.locator('#flow-origin').inner_text()
+                assert page.locator('#status-title').inner_text() == 'Protok je procijenjen iz vodostaja'
+                assert 'procjena Q(H)' in page.locator('#table-body tr').first.inner_text()
+                assert page.evaluate("Chart.getChart('chart-flow').data.datasets[0].data.at(-1).estimated === true")
+                assert page.evaluate("Chart.getChart('chart-rating').data.datasets[0].data.length === 5")
+                assert '25 objavljenih parova' in page.locator('#rating-summary').inner_text()
+                assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                with page.expect_download() as event:
+                    page.locator('#export').click()
+                text = Path(event.value.path()).read_text(encoding='utf-8-sig')
+                assert 'PROTOK_IZVOR' in text and '0,85;procjena_krivuljom' in text
+                page.route('**/vodostaj_protok.csv*', lambda route: route.fulfill(status=200, body=CSV.replace('15:00;29,0;', '15:00;29,0;0,86')))
+                page.locator('#refresh').click()
+                page.wait_for_function("document.getElementById('flow-value').textContent === '0,86'")
+                assert 'Objavljeni protok' in page.locator('#flow-origin').inner_text()
+                assert 'procjena' not in page.locator('#table-body tr').first.inner_text()
+                ctx.close()
+            assert not errors, errors
+            print('PASS: labelled estimates, curve, export and published flow recovery on desktop/mobile')
             browser.close()
     finally:
         server.shutdown()

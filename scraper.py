@@ -14,9 +14,11 @@ from typing import Dict, Tuple
 
 import requests
 from bs4 import BeautifulSoup
+from rating_curve import build_estimates
 
 URL_VODOSTAJ = "https://mvodostaji.voda.hr/Home/PregledVodostajaPostaje?sektorID=4&bpID=6&postajaID=43"
 URL_PROTOK = "https://mvodostaji.voda.hr/Home/PregledProtokaPostaje?sektorID=4&bpID=6&postajaID=43"
+URL_VODOSTAJ_BACKUP = "https://mvodostaji.voda.hr/Home/PregledVodostajaPostaje?sektorID=4&bpID=0&postajaID=1491"
 
 CSV_PATH = "vodostaj_protok.csv"
 
@@ -335,6 +337,7 @@ def main(argv=None):
     parser.add_argument("--max-age-hours", type=float, default=3)
     parser.add_argument("--lookback-hours", type=int, default=168)
     parser.add_argument("--snapshot-dir", help="Sačuvaj izvorni HTML za dijagnostiku")
+    parser.add_argument("--estimates-file", help="Odvojeni procijenjeni protoci; zadano uz CSV: flow-estimates.json")
     args = parser.parse_args(argv)
     if not math.isfinite(args.max_age_hours) or args.max_age_hours <= 0 or args.lookback_hours < 1:
         parser.error("Prag svježine i razdoblje provjere moraju biti pozitivni")
@@ -365,15 +368,56 @@ def main(argv=None):
                         "count": len(data),
                         "oldest": " ".join(min(data, key=measurement_time)),
                         "newest": " ".join(newest), "age_hours": round(age, 2),
+                        "url": url,
                     }
                 except (RuntimeError, ValueError) as exc:
                     report["source_errors"][mode] = str(exc)
                     report["sources"][mode] = {"status": "error", "error": str(exc)}
                     print(f"[WARN] {mode}: {exc}", file=sys.stderr)
+            # The replacement ID is the same named station, with the same cm
+            # scale. Keep primary values and all existing levels on overlap.
+            if report['sources']['vodostaj']['status'] != 'ok':
+                try:
+                    html = fetch_html(URL_VODOSTAJ_BACKUP)
+                    if args.snapshot_dir:
+                        Path(args.snapshot_dir).mkdir(parents=True, exist_ok=True)
+                        Path(args.snapshot_dir, 'vodostaj-backup.html').write_text(html, encoding='utf-8')
+                    soup = BeautifulSoup(html, 'html.parser')
+                    metadata = soup.select('table#example td[colspan="4"]')
+                    if not any(re.fullmatch(r'Ilova\s*[-–]\s*Maslenjača', cell.get_text(' ', strip=True)) for cell in metadata):
+                        raise ValueError('Rezervni izvor nije postaja Ilova - Maslenjača')
+                    backup = parse_table(html, 'vodostaj')
+                    newest = max(backup, key=measurement_time)
+                    age = age_hours(newest, now)
+                    if age < -1:
+                        raise ValueError(f'Budući podaci rezervnog izvora: {newest}')
+                    added = {k: v for k, v in backup.items()
+                             if k not in sources['vodostaj'] and not existing.get(k, {}).get('VODOSTAJ')}
+                    sources['vodostaj'].update({k: existing.get(k, {}).get('VODOSTAJ') or v
+                                               for k, v in backup.items() if k not in sources['vodostaj']})
+                    report['fallback'] = {'status': 'stale' if age > args.max_age_hours else 'ok',
+                                          'url': URL_VODOSTAJ_BACKUP, 'added_hours': len(added),
+                                          'newest': ' '.join(newest), 'age_hours': round(age, 2)}
+                    if sources['vodostaj']:
+                        newest = max(sources['vodostaj'], key=measurement_time)
+                        age = age_hours(newest, now)
+                        report['sources']['vodostaj'] = {
+                            'status': 'stale' if age > args.max_age_hours else 'fallback',
+                            'url': URL_VODOSTAJ_BACKUP, 'count': len(sources['vodostaj']),
+                            'newest': ' '.join(newest), 'age_hours': round(age, 2)}
+                except (RuntimeError, ValueError) as exc:
+                    report['fallback'] = {'status': 'error', 'url': URL_VODOSTAJ_BACKUP, 'error': str(exc)}
+                    print(f'[WARN] rezervni vodostaj: {exc}', file=sys.stderr)
             rows = merge_rows(existing, sources["vodostaj"], sources["protok"])
             # A failed source never erases the healthy source or existing values.
             if rows != existing:
                 save_csv(args.csv, rows)
+            estimates = build_estimates(rows)
+            write_json_atomic(estimates, args.estimates_file or str(Path(args.csv).with_name('flow-estimates.json')))
+            report['estimated_flow'] = {
+                'count': len(estimates['estimates']), 'unsupported_hours': estimates['unsupported_hours'],
+                'model_id': estimates['model']['id'] if estimates['model'] else None,
+                'latest': estimates['estimates'][-1] if estimates['estimates'] else None}
             report["unpaired_source_hours"] = [" ".join(k) for k in sorted(
                 set(sources["vodostaj"]) ^ set(sources["protok"]), key=measurement_time)]
             report["new_rows"] = len(set(rows) - set(existing))
@@ -382,7 +426,7 @@ def main(argv=None):
         bad = bool(report["freshness_errors"] or any(report["missing"].values()))
         bad = bad or bool(report.get("unpaired_source_hours") or report.get("source_errors"))
         bad = bad or any(source["status"] != "ok" for source in report.get("sources", {}).values())
-        failed = not args.check and len(report.get("source_errors", {})) == 2
+        failed = not args.check and not any(source.get('count', 0) for source in report.get('sources', {}).values())
         report["status"] = "error" if failed else "degraded" if bad else "ok"
         report["latest"] = {}
         for field in ("VODOSTAJ", "PROTOK"):
