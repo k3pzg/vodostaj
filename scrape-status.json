@@ -1,12 +1,12 @@
 {
-  "checked_at": "2026-11-22T16:14:15.087645+01:00",
+  "checked_at": "2026-11-22T22:43:23.644811+01:00",
   "sources": {
     "vodostaj": {
       "status": "fallback",
       "url": "https://mvodostaji.voda.hr/Home/PregledVodostajaPostaje?sektorID=4&bpID=0&postajaID=1491",
-      "count": 65,
-      "newest": "22.11.2026 16:00",
-      "age_hours": 0.24
+      "count": 71,
+      "newest": "22.11.2026 22:00",
+      "age_hours": 0.72
     },
     "protok": {
       "status": "error",
@@ -20,19 +20,19 @@
   "fallback": {
     "status": "ok",
     "url": "https://mvodostaji.voda.hr/Home/PregledVodostajaPostaje?sektorID=4&bpID=0&postajaID=1491",
-    "added_hours": 9,
-    "newest": "22.11.2026 16:00",
-    "age_hours": 0.24
+    "added_hours": 6,
+    "newest": "22.11.2026 22:00",
+    "age_hours": 0.72
   },
   "estimated_flow": {
-    "count": 377,
+    "count": 383,
     "unsupported_hours": 0,
     "model_id": "d9429d2e6ccdf435",
     "latest": {
       "date": "22.11.2026",
-      "time": "16:00",
-      "water_cm": 26.0,
-      "flow_m3s": 0.68
+      "time": "22:00",
+      "water_cm": 28.0,
+      "flow_m3s": 0.79
     }
   },
   "unpaired_source_hours": [
@@ -100,22 +100,22 @@
     "22.11.2026 13:00",
     "22.11.2026 14:00",
     "22.11.2026 15:00",
-    "22.11.2026 16:00"
+    "22.11.2026 16:00",
+    "22.11.2026 17:00",
+    "22.11.2026 18:00",
+    "22.11.2026 19:00",
+    "22.11.2026 20:00",
+    "22.11.2026 21:00",
+    "22.11.2026 22:00"
   ],
-  "new_rows": 9,
-  "changed_rows": 9,
+  "new_rows": 6,
+  "changed_rows": 6,
   "timezone": "Europe/Zagreb",
   "lookback_hours": 168,
   "max_age_hours": 3,
   "missing": {
     "VODOSTAJ": [],
     "PROTOK": [
-      "15.11.2026 16:00",
-      "15.11.2026 17:00",
-      "15.11.2026 18:00",
-      "15.11.2026 19:00",
-      "15.11.2026 20:00",
-      "15.11.2026 21:00",
       "15.11.2026 22:00",
       "15.11.2026 23:00",
       "16.11.2026 00:00",
@@ -278,22 +278,28 @@
       "22.11.2026 13:00",
       "22.11.2026 14:00",
       "22.11.2026 15:00",
-      "22.11.2026 16:00"
+      "22.11.2026 16:00",
+      "22.11.2026 17:00",
+      "22.11.2026 18:00",
+      "22.11.2026 19:00",
+      "22.11.2026 20:00",
+      "22.11.2026 21:00",
+      "22.11.2026 22:00"
     ]
   },
   "freshness_errors": {
-    "PROTOK": "Nesvježi ili budući podaci: ('06.11.2026', '11:00'), starost 389.24 h"
+    "PROTOK": "Nesvježi ili budući podaci: ('06.11.2026', '11:00'), starost 395.72 h"
   },
-  "total_rows": 5867,
+  "total_rows": 5873,
   "status": "degraded",
   "latest": {
     "VODOSTAJ": {
-      "time": "22.11.2026 16:00",
-      "age_hours": 0.24
+      "time": "22.11.2026 22:00",
+      "age_hours": 0.72
     },
     "PROTOK": {
       "time": "06.11.2026 11:00",
-      "age_hours": 389.24
+      "age_hours": 395.72
     }
   }
 }
